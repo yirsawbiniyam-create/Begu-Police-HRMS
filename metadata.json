@@ -1,0 +1,6 @@
+{
+  "name": "የቤጉ ፖሊስ HRMS - የሰው ኃይል አስተዳደርና የአባላት ፖርታል",
+  "description": "የቤኒሻንጉል ጉሙዝ ክልል ፖሊስ ኮሚሽን ዲጂታል የሰው ኃይል አስተዳደር (HRMS)፣ የመታወቂያ ሲስተም ውህደት እና የአባላት Self-Service Portal",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

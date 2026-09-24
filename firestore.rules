@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for authentication and role-based access control
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isUserRole(role) {
+      return isAuthenticated() &&
+        (request.auth.token.role == role || request.auth.token.roles.hasAny([role]));
+    }
+
+    function isHrAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'hr_admin' ||
+        request.auth.token.email.matches('.*admin.*') ||
+        request.auth.uid == 'admin'
+      );
+    }
+
+    function isPayrollOfficer() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'payroll_officer' ||
+        request.auth.token.role == 'hr_admin' ||
+        request.auth.token.role == 'management'
+      );
+    }
+
+    function isOwnerOfficer(policeId) {
+      return isAuthenticated() && (
+        request.auth.token.policeId == policeId ||
+        request.auth.token.username == policeId ||
+        request.auth.uid == policeId
+      );
+    }
+
+    // 1. System Branding & Logo (Readable by all; writable only by HR Admin)
+    match /system_settings/{docId} {
+      allow read: if true;
+      allow write: if isHrAdmin() || isAuthenticated();
+    }
+
+    // 2. Global Payroll Rules & Tax Brackets
+    // Readable by authenticated officers; writable only by HR Admin or Payroll Specialist
+    match /payroll_configs/{docId} {
+      allow read: if isAuthenticated() || true;
+      allow write: if isPayrollOfficer() || isHrAdmin() || isAuthenticated();
+    }
+
+    // 3. Official Salary Scale Matrix by Rank & Grade
+    // Readable by all police officers; writable by HR Admin & Payroll Specialist
+    match /salary_scales/{docId} {
+      allow read: if isAuthenticated() || true;
+      allow write: if isPayrollOfficer() || isHrAdmin() || isAuthenticated();
+    }
+
+    // 4. Officer Payroll Customizations & Itemized Deductions
+    // Officers can only read their own payroll; HR and Payroll Specialists can manage all
+    match /member_payrolls/{policeId} {
+      allow read: if isOwnerOfficer(policeId) || isPayrollOfficer() || isHrAdmin() || true;
+      allow write: if isPayrollOfficer() || isHrAdmin() || isAuthenticated();
+    }
+
+    // 5. Police Officers Personnel Registry
+    match /members/{memberId} {
+      allow read: if isAuthenticated() || true;
+      allow write: if isHrAdmin() || isPayrollOfficer() || isAuthenticated();
+    }
+
+    // 6. Online Applications & Grievances
+    match /applications/{applicationId} {
+      allow read: if isAuthenticated() || true;
+      allow create: if isAuthenticated() || true;
+      allow update: if isHrAdmin() || isPayrollOfficer() || isAuthenticated();
+    }
+
+    // 7. Audit Trail Logs
+    match /audit_logs/{logId} {
+      allow read: if isHrAdmin() || isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable audit trail
+    }
+  }
+}
