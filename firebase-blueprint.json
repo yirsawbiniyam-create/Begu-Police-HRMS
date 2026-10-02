@@ -51,6 +51,29 @@
         "updatedAt": { "type": "string" },
         "updatedBy": { "type": "string" }
       }
+    },
+    "members": {
+      "collection": "members",
+      "fields": {
+        "policeId": { "type": "string" },
+        "badgeNumber": { "type": "string" },
+        "currentRank": { "type": "string" },
+        "currentDepartment": { "type": "string" },
+        "currentStation": { "type": "string" },
+        "position": { "type": "string" },
+        "status": { "type": "string" },
+        "identity": { "type": "object" },
+        "trainingHistory": { "type": "array" },
+        "performanceHistory": { "type": "array" },
+        "leaveHistory": { "type": "array" },
+        "leaveBalance": { "type": "object" },
+        "benefits": { "type": "array" },
+        "disciplinaryRecords": { "type": "array" },
+        "awardsAndHonors": { "type": "array" },
+        "separation": { "type": "object" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      }
     }
   },
   "firestore": {

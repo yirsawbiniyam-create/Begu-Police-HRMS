@@ -20,13 +20,24 @@ import {
   ExternalLink,
   MapPin,
   Building,
-  UserCheck
+  UserCheck,
+  Bell,
+  Check
 } from 'lucide-react';
 
 export const MemberSelfServicePortal: React.FC = () => {
-  const { activeMember, applications, submitApplication, t, systemLogo, getCalculatedPayroll } = useHrms();
+  const {
+    activeMember,
+    applications,
+    submitApplication,
+    t,
+    systemLogo,
+    getCalculatedPayroll,
+    notifications,
+    markNotificationRead
+  } = useHrms();
 
-  const [activeSection, setActiveSection] = useState<'profile' | 'salary' | 'applications' | 'career' | 'leave'>('profile');
+  const [activeSection, setActiveSection] = useState<'profile' | 'salary' | 'notifications' | 'applications' | 'career' | 'leave'>('profile');
   const [showNewAppModal, setShowNewAppModal] = useState(false);
 
   // New Application Form State
@@ -50,6 +61,12 @@ export const MemberSelfServicePortal: React.FC = () => {
   const memberApplications = applications.filter(
     a => a.policeId.toUpperCase() === activeMember.policeId.toUpperCase()
   );
+
+  // Filter notifications belonging to this member or general announcements
+  const memberNotifications = notifications.filter(
+    n => !n.targetPoliceId || n.targetPoliceId.toUpperCase() === activeMember.policeId.toUpperCase() || n.targetPoliceId === 'ALL'
+  );
+  const unreadNotifications = memberNotifications.filter(n => !n.isRead);
 
   // Automated live calculation from Payroll Engine
   const liveCalc = getCalculatedPayroll(activeMember.policeId);
@@ -180,11 +197,68 @@ export const MemberSelfServicePortal: React.FC = () => {
         </div>
       </div>
 
+      {/* Dynamic Member Alert Notification Banner */}
+      {unreadNotifications.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-sky-500/10 border-2 border-amber-500/40 rounded-2xl p-4 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="p-2.5 bg-amber-500 text-slate-950 rounded-xl font-bold flex-shrink-0 mt-0.5 sm:mt-0 shadow">
+              <Bell className="w-5 h-5 animate-bounce" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-amber-300 uppercase tracking-wide">
+                  {unreadNotifications[0].title}
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {unreadNotifications[0].date}
+                </span>
+                {unreadNotifications[0].type === 'salary' && (
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                    ደመወዝ / ፔይስሊፕ
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-white font-medium mt-1">
+                {unreadNotifications[0].message}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+            {unreadNotifications[0].type === 'salary' && (
+              <button
+                onClick={() => {
+                  markNotificationRead(unreadNotifications[0].id);
+                  setActiveSection('salary');
+                }}
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>{t('ስሊፑን ተመልከት', 'View Payslip')}</span>
+              </button>
+            )}
+            <button
+              onClick={() => markNotificationRead(unreadNotifications[0].id)}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center gap-1"
+            >
+              <Check className="w-3 h-3 text-emerald-400" />
+              <span>{t('አነበብኩት', 'Mark Read')}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Section Navigation Tabs */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-1.5 flex space-x-1 overflow-x-auto scrollbar-none">
         {[
           { id: 'profile', label: t('የግል ማህደር & መታወቂያ', 'My Profile & ID Card'), icon: Shield },
           { id: 'salary', label: t('የወር ደመወዝ & Payslip', 'My Monthly Salary'), icon: CreditCard },
+          {
+            id: 'notifications',
+            label: t('ማሳወቂያዎች', 'Alerts & Notices'),
+            icon: Bell,
+            count: unreadNotifications.length > 0 ? unreadNotifications.length : undefined
+          },
           { id: 'applications', label: t('ያቀረብኳቸው ማመልከቻዎች', 'My Applications'), icon: FileText, count: memberApplications.length },
           { id: 'career', label: t('የማዕረግና የሙያ ታሪክ', 'Rank & Career History'), icon: Award },
           { id: 'leave', label: t('የእረፍት ፈቃድ ሁኔታ', 'Leave Balances'), icon: Calendar, badge: `${activeMember.leaveBalance.annualRemaining} days` }
@@ -455,27 +529,38 @@ export const MemberSelfServicePortal: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-300">{t('መሰረታዊ ደመወዝ', 'Base Salary')}</span>
-                  <span className="font-mono font-bold text-white">{activeMember.baseSalary.toLocaleString()} ETB</span>
+                  <span className="font-mono font-bold text-white">{baseSalary.toLocaleString()} ETB</span>
                 </div>
+
+                {/* የቀለብ ብር (Ration Allowance) */}
+                <div className="flex justify-between bg-amber-500/10 p-2 rounded-lg border border-amber-500/25">
+                  <span className="text-amber-300 font-bold flex items-center gap-1">
+                    ⭐ {t('የቀለብ ብር (Ration Allowance)', 'Food & Ration Allowance')}
+                  </span>
+                  <span className="font-mono font-bold text-amber-300">
+                    +{(liveCalc?.allowances.ration ?? activeMember.monthlyAllowances.ration ?? 1500).toLocaleString()} ETB
+                  </span>
+                </div>
+
                 <div className="flex justify-between">
                   <span className="text-slate-400">{t('የስራ ኃላፊነት አበል', 'Duty Allowance')}</span>
-                  <span className="font-mono text-slate-200">{activeMember.monthlyAllowances.duty.toLocaleString()} ETB</span>
+                  <span className="font-mono text-slate-200">{(liveCalc?.allowances.duty ?? activeMember.monthlyAllowances.duty).toLocaleString()} ETB</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">{t('የሜዳ/ተልዕኮ አበል', 'Field Allowance')}</span>
-                  <span className="font-mono text-slate-200">{activeMember.monthlyAllowances.field.toLocaleString()} ETB</span>
+                  <span className="font-mono text-slate-200">{(liveCalc?.allowances.field ?? activeMember.monthlyAllowances.field).toLocaleString()} ETB</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">{t('የቤት አበል', 'Housing Allowance')}</span>
-                  <span className="font-mono text-slate-200">{activeMember.monthlyAllowances.housing.toLocaleString()} ETB</span>
+                  <span className="font-mono text-slate-200">{(liveCalc?.allowances.housing ?? activeMember.monthlyAllowances.housing).toLocaleString()} ETB</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">{t('የትራንስፖርት አበል', 'Transport Allowance')}</span>
-                  <span className="font-mono text-slate-200">{activeMember.monthlyAllowances.transport.toLocaleString()} ETB</span>
+                  <span className="font-mono text-slate-200">{(liveCalc?.allowances.transport ?? activeMember.monthlyAllowances.transport).toLocaleString()} ETB</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">{t('የስጋት (Hazard) አበል', 'Hazard Allowance')}</span>
-                  <span className="font-mono text-slate-200">{activeMember.monthlyAllowances.hazard.toLocaleString()} ETB</span>
+                  <span className="font-mono text-slate-200">{(liveCalc?.allowances.hazard ?? activeMember.monthlyAllowances.hazard).toLocaleString()} ETB</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-slate-800 font-bold text-emerald-400">
                   <span>{t('ጠቅላላ ገቢ (Gross Pay)', 'Total Gross Pay')}</span>
@@ -484,7 +569,7 @@ export const MemberSelfServicePortal: React.FC = () => {
               </div>
 
               {/* Deductions */}
-              <div className="space-y-2.5 text-xs">
+              <div className="space-y-2 text-xs">
                 <div className="font-bold text-rose-400 uppercase text-[11px] pb-1 border-b border-slate-800">
                   {t('የተቀናሽ ዝርዝር (Deductions)', 'Deductions Breakdown')}
                 </div>
@@ -496,22 +581,71 @@ export const MemberSelfServicePortal: React.FC = () => {
                   <span className="text-slate-300">{t('የስራ ግብር (Income Tax)', 'Income Tax Withholding')}</span>
                   <span className="font-mono text-rose-300">-{taxDeduction.toLocaleString()} ETB</span>
                 </div>
-                {liveCalc && liveCalc.deductions.creditAssociation > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-300">{t('የፖሊስ ብድርና ቁጠባ', 'Credit Union')}</span>
-                    <span className="font-mono text-rose-300">-{liveCalc.deductions.creditAssociation.toLocaleString()} ETB</span>
+
+                {/* ከግላዊ ተበድሮ ከሆነ የሚቀነስ */}
+                {liveCalc && liveCalc.deductions.personalLoan > 0 && (
+                  <div className="flex justify-between bg-rose-500/10 p-1.5 rounded border border-rose-500/20">
+                    <span className="text-rose-300 font-bold">{t('ከግል ብድር ቅነሳ', 'Personal Loan Advance')}</span>
+                    <span className="font-mono text-rose-300 font-bold">-{liveCalc.deductions.personalLoan.toLocaleString()} ETB</span>
                   </div>
                 )}
-                {liveCalc && liveCalc.deductions.healthInsurance > 0 && (
+
+                {/* የሰላም ብሩህ ኃ/የተ/ብድርና ቁጠባ ማኅበር */}
+                {liveCalc && liveCalc.deductions.selamBiruhSavings > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-slate-300">{t('የጤና መድህን ፈንድ', 'Health Fund')}</span>
-                    <span className="font-mono text-rose-300">-{liveCalc.deductions.healthInsurance.toLocaleString()} ETB</span>
+                    <span className="text-sky-300">{t('የሰላም ብሩህ ወርሃዊ ቁጠባ', 'Selam Biruh Savings')}</span>
+                    <span className="font-mono text-sky-300">-{liveCalc.deductions.selamBiruhSavings.toLocaleString()} ETB</span>
+                  </div>
+                )}
+                {liveCalc && liveCalc.deductions.selamBiruhLotteryShare > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sky-300">{t('የሰላም ብሩህ የእጣ ክፍያ', 'Selam Biruh Share/Lottery')}</span>
+                    <span className="font-mono text-sky-300">-{liveCalc.deductions.selamBiruhLotteryShare.toLocaleString()} ETB</span>
+                  </div>
+                )}
+                {liveCalc && liveCalc.deductions.selamBiruhLoan > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-rose-300">{t('የሰላም ብሩህ ብድር ቅነሳ', 'Selam Biruh Loan')}</span>
+                    <span className="font-mono text-rose-300">-{liveCalc.deductions.selamBiruhLoan.toLocaleString()} ETB</span>
+                  </div>
+                )}
+                {liveCalc && liveCalc.deductions.generalCreditLoan > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-300">{t('አጠቃላይ የብድርና ቁጠባ ብድር', 'General SACCO Loan')}</span>
+                    <span className="font-mono text-rose-300">-{liveCalc.deductions.generalCreditLoan.toLocaleString()} ETB</span>
+                  </div>
+                )}
+
+                {/* የኤችአይቪ እና የህክምና ፈንድ */}
+                {liveCalc && liveCalc.deductions.hivFund > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-emerald-300">{t('የኤችአይቪ ፈንድ መዋጮ', 'HIV/AIDS Contribution')}</span>
+                    <span className="font-mono text-emerald-300">-{liveCalc.deductions.hivFund.toLocaleString()} ETB</span>
+                  </div>
+                )}
+                {liveCalc && (liveCalc.deductions.medical > 0 || liveCalc.deductions.healthInsurance > 0) && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-300">{t('የህክምና መዋጮ / መድህን', 'Medical / Health Fund')}</span>
+                    <span className="font-mono text-rose-300">-{(liveCalc.deductions.medical || liveCalc.deductions.healthInsurance).toLocaleString()} ETB</span>
+                  </div>
+                )}
+                {liveCalc && liveCalc.deductions.other > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-300">{t('ልዩ ልዩ / ሌሎች ቅነሳዎች', 'Other Deductions')}</span>
+                    <span className="font-mono text-rose-300">-{liveCalc.deductions.other.toLocaleString()} ETB</span>
+                  </div>
+                )}
+
+                {liveCalc && liveCalc.deductions.creditAssociation > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">{t('የፖሊስ ብድርና ቁጠባ ማህበር', 'Police Credit Union')}</span>
+                    <span className="font-mono text-slate-300">-{liveCalc.deductions.creditAssociation.toLocaleString()} ETB</span>
                   </div>
                 )}
                 {liveCalc && liveCalc.deductions.redCross > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-slate-300">{t('ቀይ መስቀል ማህበር', 'Red Cross')}</span>
-                    <span className="font-mono text-rose-300">-{liveCalc.deductions.redCross.toLocaleString()} ETB</span>
+                    <span className="text-slate-400">{t('ቀይ መስቀል ማህበር', 'Red Cross')}</span>
+                    <span className="font-mono text-slate-300">-{liveCalc.deductions.redCross.toLocaleString()} ETB</span>
                   </div>
                 )}
                 {liveCalc && liveCalc.deductions.courtPenalty > 0 && (
@@ -526,7 +660,7 @@ export const MemberSelfServicePortal: React.FC = () => {
                     <span className="font-mono text-rose-300">-{c.amount.toLocaleString()} ETB</span>
                   </div>
                 ))}
-                <div className="flex justify-between pt-4 border-t border-slate-800 font-bold text-rose-400">
+                <div className="flex justify-between pt-3 border-t border-slate-800 font-bold text-rose-400">
                   <span>{t('ጠቅላላ ተቀናሽ', 'Total Deductions')}</span>
                   <span className="font-mono text-sm">-{totalDeductions.toLocaleString()} ETB</span>
                 </div>
@@ -565,6 +699,111 @@ export const MemberSelfServicePortal: React.FC = () => {
                 <span>{t('የደመወዝ ቅሬታ አስገባ', 'File Salary Complaint')}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 2.5: NOTIFICATIONS & SALARY ALERTS */}
+      {activeSection === 'notifications' && (
+        <div className="space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-amber-400" />
+                  <span>{t('የደረሱኝ ማሳወቂያዎችና የደመወዝ ጥሪዎች', 'My Notifications & Payroll Alerts')}</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {t('የወርሃዊ ደመወዝ ስሊፕ ዝግጁነት፣ የቅነሳዎች ማስተካከያ እና ይፋዊ መግለጫዎች', 'Live salary slip release alerts, deduction updates, and administrative notices')}
+                </p>
+              </div>
+
+              {unreadNotifications.length > 0 && (
+                <button
+                  onClick={() => {
+                    unreadNotifications.forEach(n => markNotificationRead(n.id));
+                  }}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5 self-start sm:self-auto"
+                >
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{t('ሁሉንም አንብቤያለሁ', 'Mark All Read')}</span>
+                </button>
+              )}
+            </div>
+
+            {memberNotifications.length === 0 ? (
+              <div className="p-8 text-center bg-slate-950/60 rounded-xl border border-slate-800 text-slate-400 text-xs">
+                <Bell className="w-8 h-8 mx-auto mb-2 text-slate-600" />
+                <p className="font-semibold text-slate-300">{t('ምንም የተላከ ማሳወቂያ የለም', 'No notifications received yet')}</p>
+                <p className="mt-1">{t('የደመወዝ ስሊፕ ሲዘጋጅ ወይም ቅነሳ ሲቀየር ማሳወቂያ እዚህ ይደርስዎታል', 'Alerts will appear here automatically when payslips are ready or deductions change.')}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {memberNotifications.map(n => (
+                  <div
+                    key={n.id}
+                    className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                      !n.isRead
+                        ? 'bg-amber-500/10 border-amber-500/30'
+                        : 'bg-slate-950/80 border-slate-800 text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`p-2 rounded-xl flex-shrink-0 mt-0.5 sm:mt-0 ${
+                          n.type === 'salary'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        }`}
+                      >
+                        {n.type === 'salary' ? <CreditCard className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-white text-xs">{n.title}</span>
+                          <span className="font-mono text-[10px] text-slate-400">{n.date}</span>
+                          {!n.isRead ? (
+                            <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.2 rounded-full">
+                              አዲስ
+                            </span>
+                          ) : (
+                            <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded-full">
+                              የተነበበ
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed">{n.message}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+                      {n.type === 'salary' && (
+                        <button
+                          onClick={() => {
+                            if (!n.isRead) markNotificationRead(n.id);
+                            setActiveSection('salary');
+                          }}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 shadow"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>{t('ስሊፑን ተመልከት', 'View Payslip')}</span>
+                        </button>
+                      )}
+                      {!n.isRead && (
+                        <button
+                          onClick={() => markNotificationRead(n.id)}
+                          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
+                          title={t('አንብቤያለሁ', 'Mark as read')}
+                        >
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

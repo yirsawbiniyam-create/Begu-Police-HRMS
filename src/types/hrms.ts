@@ -210,6 +210,24 @@ export interface SeparationRecord {
   auditNote?: string;
 }
 
+export interface DisciplinaryRecord {
+  id: string;
+  date: string;
+  incident: string;
+  measureTaken: string;
+  verdictRef: string;
+  status: 'የተዘጋ' | 'በክትትል ላይ';
+}
+
+export interface AwardItem {
+  id: string;
+  date: string;
+  title: string;
+  awardedBy: string;
+  reason: string;
+  medalOrCertRef: string;
+}
+
 export interface MemberProfile {
   // Primary identifier mapped to Police ID System
   policeId: string; // Master Key (e.g. BG-000125)
@@ -237,6 +255,7 @@ export interface MemberProfile {
     housing: number;
     transport: number;
     hazard: number;
+    ration?: number; // የቀለብ ብር (Food / Ration Allowance)
   };
   pensionDeductionRate: number; // e.g. 0.07 (7%)
   taxDeductionRate: number; // e.g. 0.15 (15%)
@@ -258,22 +277,8 @@ export interface MemberProfile {
   leaveHistory: LeaveRecord[];
   documents: PersonnelDocument[];
   benefits: BenefitItem[];
-  disciplinaryRecords: Array<{
-    id: string;
-    date: string;
-    incident: string;
-    measureTaken: string;
-    verdictRef: string;
-    status: 'የተዘጋ' | 'በክትትል ላይ';
-  }>;
-  awardsAndHonors: Array<{
-    id: string;
-    date: string;
-    title: string;
-    awardedBy: string;
-    reason: string;
-    medalOrCertRef: string;
-  }>;
+  disciplinaryRecords: DisciplinaryRecord[];
+  awardsAndHonors: AwardItem[];
 
   // Service Separation (if departed)
   separation?: SeparationRecord;
@@ -452,6 +457,7 @@ export interface PayrollGlobalConfig {
   standardDeductions: PayrollDeductionConfig[];
   defaultDutyAllowance: number;
   defaultHazardAllowance: number;
+  defaultRationAllowance?: number; // የቀለብ ብር መነሻ አበል (Default Ration Allowance)
   updatedAt: string;
   updatedBy: string;
 }
@@ -475,9 +481,24 @@ export interface MemberPayrollCustomization {
     housing?: number;
     transport?: number;
     hazard?: number;
+    ration?: number; // የቀለብ ብር (Food / Ration Allowance)
   };
   additionalAllowances?: Array<{ id: string; name: string; amount: number }>;
-  creditAssociationDeduction?: number; // fixed amount in ETB
+
+  // Standard and Dedicated Police Deductions
+  creditAssociationDeduction?: number; // አጠቃላይ የብድርና ቁጠባ ማህበር
+  personalLoanDeduction?: number; // ከግል ብድር ቅነሳ (Personal Advance / Loan Deduction)
+  
+  // የሰላም ብሩህ ኃ/የተ/የብድርና ቁጠባ ማኅበር (Selam Biruh SACCO)
+  selamBiruhSavings?: number; // የሰላም ብሩህ ወርሃዊ ቁጠባ (Monthly Savings)
+  selamBiruhLotteryShare?: number; // የሰላም ብሩህ የእጣ ክፍያ (Lottery / Share Installment)
+  selamBiruhLoan?: number; // የሰላም ብሩህ ብድር ቅነሳ (Loan Repayment)
+  generalCreditLoan?: number; // አጠቃላይ የብድርና ቁጠባ ብድር (General SACCO Loan)
+
+  // Dedicated Health, HIV and Other Contributions
+  hivFundDeduction?: number; // የኤችአይቪ ፈንድ መዋጮ (HIV/AIDS Fund)
+  medicalDeduction?: number; // የህክምና መዋጮ (Medical Contribution)
+  otherDeductions?: number; // ልዩ ልዩ / ሌሎች ቅነሳዎች (Other Deductions)
   healthInsuranceDeduction?: number; // fixed amount in ETB
   redCrossDeduction?: number; // fixed amount in ETB
   courtOrDisciplinaryPenalty?: number; // fixed amount in ETB
@@ -501,6 +522,7 @@ export interface CalculatedOfficerPayroll {
     housing: number;
     transport: number;
     hazard: number;
+    ration: number; // የቀለብ ብር (Food / Ration Allowance)
     additional: Array<{ id: string; name: string; amount: number }>;
     totalAllowances: number;
   };
@@ -510,6 +532,14 @@ export interface CalculatedOfficerPayroll {
     pensionEmployer: number;
     incomeTax: number;
     creditAssociation: number;
+    personalLoan: number; // ከግል ብድር ቅነሳ
+    selamBiruhSavings: number; // የሰላም ብሩህ ወርሃዊ ቁጠባ
+    selamBiruhLotteryShare: number; // የሰላም ብሩህ የእጣ ክፍያ
+    selamBiruhLoan: number; // የሰላም ብሩህ ብድር
+    generalCreditLoan: number; // አጠቃላይ የብድርና ቁጠባ ብድር
+    hivFund: number; // የኤችአይቪ ፈንድ
+    medical: number; // የህክምና መዋጮ
+    other: number; // ሌሎች ቅነሳዎች
     healthInsurance: number;
     redCross: number;
     courtPenalty: number;

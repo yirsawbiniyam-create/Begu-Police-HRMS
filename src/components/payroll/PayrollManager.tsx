@@ -21,7 +21,10 @@ import {
   Users,
   ShieldCheck,
   Cloud,
-  Settings
+  Settings,
+  Bell,
+  Send,
+  AlertCircle
 } from 'lucide-react';
 import {
   MemberProfile,
@@ -46,7 +49,9 @@ export const PayrollManager: React.FC = () => {
     updateSalaryScales,
     applyRankSalaryScaleToAllMembers,
     getCalculatedPayroll,
-    allCalculatedPayrolls
+    allCalculatedPayrolls,
+    sendPayslipReadyNotification,
+    notifyAllMembersPayrollReady
   } = useHrms();
 
   const [activeTab, setActiveTab] = useState<
@@ -57,6 +62,11 @@ export const PayrollManager: React.FC = () => {
   const [selectedRankFilter, setSelectedRankFilter] = useState<string>('all');
   const [selectedMemberForPayslip, setSelectedMemberForPayslip] = useState<MemberProfile | null>(null);
   const [selectedMemberForAdjustment, setSelectedMemberForAdjustment] = useState<MemberProfile | null>(null);
+
+  // Notification States
+  const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
+  const [isNotifyingAll, setIsNotifyingAll] = useState(false);
+  const [notifyingMemberId, setNotifyingMemberId] = useState<string | null>(null);
 
   // Editable scales local state for tab 3
   const [isEditingScale, setIsEditingScale] = useState(false);
@@ -91,16 +101,38 @@ export const PayrollManager: React.FC = () => {
   );
 
   const totalBaseSalary = computedList.reduce((sum, item) => sum + item.baseSalary, 0);
+  const totalRationAllowance = computedList.reduce((sum, item) => sum + (item.allowances.ration || 0), 0);
   const totalAllowances = computedList.reduce((sum, item) => sum + item.allowances.totalAllowances, 0);
   const totalGross = computedList.reduce((sum, item) => sum + item.grossSalary, 0);
   const totalPensionEmployee = computedList.reduce((sum, item) => sum + item.deductions.pensionEmployee, 0);
   const totalPensionEmployer = computedList.reduce((sum, item) => sum + item.deductions.pensionEmployer, 0);
   const totalIncomeTax = computedList.reduce((sum, item) => sum + item.deductions.incomeTax, 0);
+  const totalPersonalLoans = computedList.reduce((sum, item) => sum + (item.deductions.personalLoan || 0), 0);
+  const totalSelamBiruh = computedList.reduce(
+    (sum, item) =>
+      sum +
+      (item.deductions.selamBiruhSavings || 0) +
+      (item.deductions.selamBiruhLotteryShare || 0) +
+      (item.deductions.selamBiruhLoan || 0) +
+      (item.deductions.generalCreditLoan || 0),
+    0
+  );
+  const totalHivAndMedical = computedList.reduce(
+    (sum, item) => sum + (item.deductions.hivFund || 0) + (item.deductions.medical || 0) + (item.deductions.other || 0),
+    0
+  );
   const totalOtherDeductions = computedList.reduce((sum, item) => {
     return (
       sum +
       item.deductions.creditAssociation +
-      item.deductions.healthInsurance +
+      item.deductions.personalLoan +
+      item.deductions.selamBiruhSavings +
+      item.deductions.selamBiruhLotteryShare +
+      item.deductions.selamBiruhLoan +
+      item.deductions.generalCreditLoan +
+      item.deductions.hivFund +
+      item.deductions.medical +
+      item.deductions.other +
       item.deductions.redCross +
       item.deductions.courtPenalty +
       item.deductions.customItems.reduce((acc, c) => acc + c.amount, 0)
@@ -108,6 +140,33 @@ export const PayrollManager: React.FC = () => {
   }, 0);
   const totalDeductions = computedList.reduce((sum, item) => sum + item.deductions.totalDeductions, 0);
   const totalNet = computedList.reduce((sum, item) => sum + item.netPay, 0);
+
+  const handleNotifyAll = async () => {
+    setIsNotifyingAll(true);
+    setNotificationStatus(null);
+    try {
+      const res = await notifyAllMembersPayrollReady('የመስከረም 2026');
+      setNotificationStatus(res.message);
+      setTimeout(() => setNotificationStatus(null), 5000);
+    } catch (err: any) {
+      setNotificationStatus(err.message || 'ስህተት ተከስቷል');
+    } finally {
+      setIsNotifyingAll(false);
+    }
+  };
+
+  const handleNotifySingleMember = async (policeId: string) => {
+    setNotifyingMemberId(policeId);
+    try {
+      const res = await sendPayslipReadyNotification(policeId, 'የመስከረም 2026');
+      setNotificationStatus(res.message);
+      setTimeout(() => setNotificationStatus(null), 4000);
+    } catch (err: any) {
+      setNotificationStatus(err.message || 'ስህተት ተከስቷል');
+    } finally {
+      setNotifyingMemberId(null);
+    }
+  };
 
   const handleExportPayrollCsv = () => {
     const headers = [
@@ -244,6 +303,21 @@ export const PayrollManager: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Automatic Notification to All Members */}
+          <button
+            onClick={handleNotifyAll}
+            disabled={isNotifyingAll}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center gap-2 transition-all shadow-md active:scale-95 disabled:opacity-50"
+            title={t('ለአባላት በሙሉ ወርሃዊ የደመወዝ ስሊፕ ዝግጁ መሆኑን ማሳወቂያ ላክ', 'Alert all members automatically that monthly salary slip is ready')}
+          >
+            <Bell className={`w-4 h-4 ${isNotifyingAll ? 'animate-bounce' : ''}`} />
+            <span>
+              {isNotifyingAll
+                ? t('ማሳወቂያ በመላክ ላይ...', 'Sending Alerts...')
+                : t('ለአባላት በሙሉ የስሊፕ ማሳወቂያ ላክ', 'Auto-Notify All Officers (Slip Ready)')}
+            </span>
+          </button>
+
           <button
             onClick={handleExportPayrollCsv}
             className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-2 transition-colors shadow"
@@ -254,8 +328,24 @@ export const PayrollManager: React.FC = () => {
         </div>
       </div>
 
+      {/* Notification Feedback Banner */}
+      {notificationStatus && (
+        <div className="bg-emerald-500/15 border-2 border-emerald-500/40 text-emerald-200 px-4 py-3 rounded-2xl flex items-center justify-between shadow-lg animate-fadeIn">
+          <div className="flex items-center gap-2.5 text-xs font-bold">
+            <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <span>{notificationStatus}</span>
+          </div>
+          <button
+            onClick={() => setNotificationStatus(null)}
+            className="text-xs text-emerald-400 hover:text-white underline font-semibold ml-4"
+          >
+            {t('ዝጋ', 'Dismiss')}
+          </button>
+        </div>
+      )}
+
       {/* Aggregate Financial Highlights KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
           <span className="text-[11px] font-semibold text-slate-400 uppercase block">
             {t('ተከፋይ አባላት', 'Paid Officers')}
@@ -276,6 +366,18 @@ export const PayrollManager: React.FC = () => {
           <span className="text-[10px] text-slate-400 mt-1 block">ETB</span>
         </div>
 
+        <div className="bg-slate-900 border border-amber-500/30 bg-amber-500/5 p-4 rounded-xl">
+          <span className="text-[11px] font-semibold text-amber-300 uppercase block">
+            ⭐ {t('የቀለብ ብር ድምር', 'Ration Allowance')}
+          </span>
+          <div className="text-lg font-black text-amber-400 font-mono mt-1">
+            +{totalRationAllowance.toLocaleString()}
+          </div>
+          <span className="text-[10px] text-amber-400/80 mt-1 block">
+            {t('የምግብ/ቀለብ አበል', 'Food ration pool')}
+          </span>
+        </div>
+
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
           <span className="text-[11px] font-semibold text-slate-400 uppercase block">
             {t('ጠቅላላ አበሎች', 'Total Allowances')}
@@ -284,7 +386,7 @@ export const PayrollManager: React.FC = () => {
             +{totalAllowances.toLocaleString()}
           </div>
           <span className="text-[10px] text-slate-400 mt-1 block">
-            {t('ስምሪት፣ ሜዳና ቤት', 'Duty, field & hazard')}
+            {t('ቀለብ፣ ስምሪት፣ ሜዳ', 'Ration, duty, hazard')}
           </span>
         </div>
 
@@ -306,11 +408,11 @@ export const PayrollManager: React.FC = () => {
             -{totalDeductions.toLocaleString()}
           </div>
           <span className="text-[10px] text-slate-400 mt-1 block">
-            {t('ጡረታ (7%) + ግብር + ሌሎች', 'Pension, tax & funds')}
+            {t('ጡረታ፣ ግብር፣ ብድር', 'Pension, tax, loans')}
           </span>
         </div>
 
-        <div className="bg-slate-900 border border-emerald-500/30 bg-emerald-500/5 p-4 rounded-xl">
+        <div className="bg-slate-900 border border-emerald-500/30 bg-emerald-500/5 p-4 rounded-xl col-span-2 sm:col-span-1">
           <span className="text-[11px] font-semibold text-emerald-400 uppercase block">
             {t('የተጣራ ክፍያ (Net Pay)', 'Total Net Payout')}
           </span>
@@ -426,12 +528,16 @@ export const PayrollManager: React.FC = () => {
                   <th className="py-3 px-3">{t('ማዕረግ', 'Rank')}</th>
                   <th className="py-3 px-3">{t('ደረጃ/እርከን', 'Scale')}</th>
                   <th className="py-3 px-3 text-right">{t('መሰረታዊ ደመወዝ', 'Base')}</th>
-                  <th className="py-3 px-3 text-right">{t('አበሎች', 'Allowances')}</th>
-                  <th className="py-3 px-3 text-right">{t('ጠቅላላ (Gross)', 'Gross')}</th>
+                  <th className="py-3 px-3 text-right text-amber-300">⭐ {t('የቀለብ ብር', 'Ration')}</th>
+                  <th className="py-3 px-3 text-right">{t('ሌሎች አበሎች', 'Other Allowances')}</th>
+                  <th className="py-3 px-3 text-right font-bold text-white">{t('ጠቅላላ (Gross)', 'Gross')}</th>
                   <th className="py-3 px-3 text-right">{t('ጡረታ (7%)', 'Pension')}</th>
                   <th className="py-3 px-3 text-right">{t('ግብር', 'Tax')}</th>
-                  <th className="py-3 px-3 text-right">{t('ሌሎች ቅነሳዎች', 'Other')}</th>
-                  <th className="py-3 px-3 text-right">{t('የተጣራ (Net Pay)', 'Net Pay')}</th>
+                  <th className="py-3 px-3 text-right text-rose-300">{t('ከግል ብድር', 'Personal Loan')}</th>
+                  <th className="py-3 px-3 text-right text-sky-300">{t('ሰላም ብሩህ', 'Selam Biruh')}</th>
+                  <th className="py-3 px-3 text-right text-emerald-300">{t('ኤችአይቪና ሌሎች', 'HIV/Other')}</th>
+                  <th className="py-3 px-3 text-right font-bold text-rose-400">{t('ጠቅላላ ቅነሳ', 'Deductions')}</th>
+                  <th className="py-3 px-3 text-right font-bold text-emerald-400">{t('የተጣራ (Net Pay)', 'Net Pay')}</th>
                   <th className="py-3 px-3 text-center">{t('ድርጊቶች', 'Actions')}</th>
                 </tr>
               </thead>
@@ -442,11 +548,18 @@ export const PayrollManager: React.FC = () => {
                     payrollConfig,
                     memberPayrollCustomizations[m.policeId.toUpperCase()]
                   );
-                  const otherDeductionsTotal =
-                    calc.deductions.creditAssociation +
-                    calc.deductions.healthInsurance +
-                    calc.deductions.redCross +
-                    calc.deductions.courtPenalty +
+                  const nonRationAllowances = Math.max(0, calc.allowances.totalAllowances - (calc.allowances.ration || 0));
+                  const selamBiruhTotal =
+                    (calc.deductions.selamBiruhSavings || 0) +
+                    (calc.deductions.selamBiruhLotteryShare || 0) +
+                    (calc.deductions.selamBiruhLoan || 0) +
+                    (calc.deductions.generalCreditLoan || 0);
+                  const hivAndOtherTotal =
+                    (calc.deductions.hivFund || 0) +
+                    (calc.deductions.medical || 0) +
+                    (calc.deductions.other || 0) +
+                    (calc.deductions.redCross || 0) +
+                    (calc.deductions.courtPenalty || 0) +
                     calc.deductions.customItems.reduce((sum, item) => sum + item.amount, 0);
 
                   return (
@@ -472,8 +585,11 @@ export const PayrollManager: React.FC = () => {
                       <td className="py-2.5 px-3 text-right font-mono text-white">
                         {calc.baseSalary.toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-amber-300">
-                        {calc.allowances.totalAllowances.toLocaleString()}
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-300">
+                        +{calc.allowances.ration.toLocaleString()}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-300">
+                        +{nonRationAllowances.toLocaleString()}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-white">
                         {calc.grossSalary.toLocaleString()}
@@ -485,7 +601,16 @@ export const PayrollManager: React.FC = () => {
                         -{calc.deductions.incomeTax.toLocaleString()}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono text-rose-300">
-                        -{otherDeductionsTotal.toLocaleString()}
+                        {calc.deductions.personalLoan > 0 ? `-${calc.deductions.personalLoan.toLocaleString()}` : '-'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-sky-300">
+                        {selamBiruhTotal > 0 ? `-${selamBiruhTotal.toLocaleString()}` : '-'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-emerald-300">
+                        {hivAndOtherTotal > 0 ? `-${hivAndOtherTotal.toLocaleString()}` : '-'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-400">
+                        -{calc.deductions.totalDeductions.toLocaleString()}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-400">
                         {calc.netPay.toLocaleString()}
@@ -507,7 +632,17 @@ export const PayrollManager: React.FC = () => {
                             title={t('ፔይስሊፕ አሳይ', 'View Payslip')}
                           >
                             <Eye className="w-3 h-3 text-slate-400" />
-                            <span>{t('ፔይስሊፕ', 'Payslip')}</span>
+                            <span>{t('ስሊፕ', 'Slip')}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleNotifySingleMember(m.policeId)}
+                            disabled={notifyingMemberId === m.policeId}
+                            className="px-2 py-1 rounded bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 hover:text-sky-200 border border-sky-500/30 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+                            title={t('የስሊፕ ዝግጁነት ማሳወቂያ ለአባሉ ላክ', 'Send slip ready alert to this officer')}
+                          >
+                            <Bell className={`w-3 h-3 ${notifyingMemberId === m.policeId ? 'animate-spin' : ''}`} />
+                            <span>{notifyingMemberId === m.policeId ? '...' : t('ማሳወቂያ', 'Alert')}</span>
                           </button>
                         </div>
                       </td>
@@ -567,24 +702,39 @@ export const PayrollManager: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mt-3 pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-xs">
+                    <div className="mt-3 pt-3 border-t border-slate-800/80 grid grid-cols-3 gap-2 text-xs">
                       <div>
-                        <span className="text-[10px] text-slate-400 block">{t('መሰረታዊ ደመወዝ', 'Base')}</span>
-                        <span className="font-mono font-bold text-white">{calc.baseSalary.toLocaleString()} ETB</span>
+                        <span className="text-[10px] text-slate-400 block">{t('መሰረታዊ', 'Base')}</span>
+                        <span className="font-mono font-bold text-white">{calc.baseSalary.toLocaleString()}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 block">{t('የተጣራ ተከፋይ', 'Net Pay')}</span>
-                        <span className="font-mono font-black text-emerald-400">{calc.netPay.toLocaleString()} ETB</span>
+                        <span className="text-[10px] text-amber-300 block">⭐ {t('የቀለብ ብር', 'Ration')}</span>
+                        <span className="font-mono font-bold text-amber-300">+{calc.allowances.ration.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-emerald-400 block">{t('የተጣራ ተከፋይ', 'Net Pay')}</span>
+                        <span className="font-mono font-black text-emerald-400">{calc.netPay.toLocaleString()}</span>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => setSelectedMemberForAdjustment(m)}
-                      className="mt-3 w-full py-2 bg-slate-900 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-500 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 shadow"
-                    >
-                      <Sliders className="w-3.5 h-3.5" />
-                      <span>{t('ደመወዝና ቅነሳዎችን አስተካክል', 'Adjust Salary & Deductions')}</span>
-                    </button>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setSelectedMemberForAdjustment(m)}
+                        className="py-2 bg-slate-900 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-500 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 shadow"
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                        <span>{t('ቅነሳ/አበል አስተካክል', 'Adjust')}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleNotifySingleMember(m.policeId)}
+                        disabled={notifyingMemberId === m.policeId}
+                        className="py-2 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 shadow disabled:opacity-50"
+                      >
+                        <Bell className={`w-3.5 h-3.5 ${notifyingMemberId === m.policeId ? 'animate-spin' : ''}`} />
+                        <span>{notifyingMemberId === m.policeId ? '...' : t('ስሊፕ አሳውቅ', 'Notify Slip')}</span>
+                      </button>
+                    </div>
                   </div>
                 );
               })}

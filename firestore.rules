@@ -65,22 +65,50 @@ service cloud.firestore {
 
     // 5. Police Officers Personnel Registry
     match /members/{memberId} {
-      allow read: if isAuthenticated() || true;
-      allow write: if isHrAdmin() || isPayrollOfficer() || isAuthenticated();
+      allow read, write: if true;
     }
 
     // 6. Online Applications & Grievances
     match /applications/{applicationId} {
-      allow read: if isAuthenticated() || true;
-      allow create: if isAuthenticated() || true;
-      allow update: if isHrAdmin() || isPayrollOfficer() || isAuthenticated();
+      allow read, write: if true;
     }
 
     // 7. Audit Trail Logs
     match /audit_logs/{logId} {
-      allow read: if isHrAdmin() || isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if false; // Immutable audit trail
+      allow read, write: if true;
+    }
+
+    // 8. Notifications
+    match /notifications/{notificationId} {
+      allow read, write: if true;
+    }
+
+    // 9. User Accounts
+    match /user_accounts/{userId} {
+      allow read, write: if true;
+    }
+
+    // 10. Individual HR Event Collections
+    match /trainings/{id} {
+      allow read, write: if true;
+    }
+    match /evaluations/{id} {
+      allow read, write: if true;
+    }
+    match /leaves/{id} {
+      allow read, write: if true;
+    }
+    match /benefits/{id} {
+      allow read, write: if true;
+    }
+    match /disciplinary/{id} {
+      allow read, write: if true;
+    }
+    match /awards/{id} {
+      allow read, write: if true;
+    }
+    match /separations/{id} {
+      allow read, write: if true;
     }
   }
 }

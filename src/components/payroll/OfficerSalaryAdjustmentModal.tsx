@@ -73,11 +73,47 @@ export const OfficerSalaryAdjustmentModal: React.FC<OfficerSalaryAdjustmentModal
   const [hazardAllowance, setHazardAllowance] = useState<number>(
     existingCustom?.monthlyAllowances?.hazard ?? member.monthlyAllowances?.hazard ?? 0
   );
+  // የቀለብ ብር (Food / Ration Allowance)
+  const [rationAllowance, setRationAllowance] = useState<number>(
+    existingCustom?.monthlyAllowances?.ration ??
+      member.monthlyAllowances?.ration ??
+      payrollConfig.defaultRationAllowance ??
+      1500
+  );
 
   // Deductions
   const [creditUnionDeduction, setCreditUnionDeduction] = useState<number>(
     existingCustom?.creditAssociationDeduction ?? 150
   );
+  // ከግል ብድር ቅነሳ (Personal advance loan deduction)
+  const [personalLoanDeduction, setPersonalLoanDeduction] = useState<number>(
+    existingCustom?.personalLoanDeduction ?? 0
+  );
+  // የሰላም ብሩህ ኃ/የተ/የብድርና ቁጠባ ማኅበር (Selam Biruh SACCO items)
+  const [selamBiruhSavings, setSelamBiruhSavings] = useState<number>(
+    existingCustom?.selamBiruhSavings ?? 0
+  );
+  const [selamBiruhLotteryShare, setSelamBiruhLotteryShare] = useState<number>(
+    existingCustom?.selamBiruhLotteryShare ?? 0
+  );
+  const [selamBiruhLoan, setSelamBiruhLoan] = useState<number>(
+    existingCustom?.selamBiruhLoan ?? 0
+  );
+  const [generalCreditLoan, setGeneralCreditLoan] = useState<number>(
+    existingCustom?.generalCreditLoan ?? 0
+  );
+
+  // የኤችአይቪ፣ የህክምና እና ሌሎች ቅነሳዎች (HIV, Medical & Other Deductions)
+  const [hivFundDeduction, setHivFundDeduction] = useState<number>(
+    existingCustom?.hivFundDeduction ?? 0
+  );
+  const [medicalDeduction, setMedicalDeduction] = useState<number>(
+    existingCustom?.medicalDeduction ?? existingCustom?.healthInsuranceDeduction ?? 100
+  );
+  const [otherDeductions, setOtherDeductions] = useState<number>(
+    existingCustom?.otherDeductions ?? 0
+  );
+
   const [healthFundDeduction, setHealthFundDeduction] = useState<number>(
     existingCustom?.healthInsuranceDeduction ?? 100
   );
@@ -138,16 +174,25 @@ export const OfficerSalaryAdjustmentModal: React.FC<OfficerSalaryAdjustmentModal
       field: fieldAllowance,
       housing: housingAllowance,
       transport: transportAllowance,
-      hazard: hazardAllowance
+      hazard: hazardAllowance,
+      ration: rationAllowance
     },
     creditAssociationDeduction: creditUnionDeduction,
-    healthInsuranceDeduction: healthFundDeduction,
-    redCrossDeduction: redCrossDeduction,
+    personalLoanDeduction,
+    selamBiruhSavings,
+    selamBiruhLotteryShare,
+    selamBiruhLoan,
+    generalCreditLoan,
+    hivFundDeduction,
+    medicalDeduction,
+    otherDeductions,
+    healthInsuranceDeduction: medicalDeduction,
+    redCrossDeduction,
     courtOrDisciplinaryPenalty: courtPenalty,
     customDeductions,
     notes,
     updatedAt: new Date().toISOString(),
-    updatedBy: 'ባለሙያ'
+    updatedBy: 'የደመወዝ ባለሙያ'
   };
 
   // Real-time automated calculation of everything
@@ -314,10 +359,10 @@ export const OfficerSalaryAdjustmentModal: React.FC<OfficerSalaryAdjustmentModal
           <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl space-y-3">
             <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
               <DollarSign className="w-4 h-4" />
-              <span>{t('ወርሃዊ አበሎችና ጥቅማጥቅሞች (Monthly Allowances)', 'Monthly Allowances')}</span>
+              <span>{t('ወርሃዊ አበሎችና የቀለብ ብር (Monthly Allowances & Ration)', 'Monthly Allowances & Ration')}</span>
             </h4>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
               <div>
                 <label className="text-[11px] text-slate-400 block mb-1">{t('የስምሪት (Duty):', 'Duty Allowance:')}</label>
                 <input
@@ -367,11 +412,24 @@ export const OfficerSalaryAdjustmentModal: React.FC<OfficerSalaryAdjustmentModal
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
+
+              {/* የቀለብ ብር (Ration Allowance) */}
+              <div className="bg-amber-500/10 p-2 rounded-lg border border-amber-500/30">
+                <label className="text-[11px] text-amber-300 font-bold block mb-1">
+                  ⭐ {t('የቀለብ ብር (Ration):', 'Ration Allowance:')}
+                </label>
+                <input
+                  type="number"
+                  value={rationAllowance}
+                  onChange={e => setRationAllowance(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-full bg-slate-900 border border-amber-400/50 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                />
+              </div>
             </div>
           </div>
 
           {/* Section 3: Statutory & Institutional Deductions (ቅነሳዎች) */}
-          <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl space-y-3">
+          <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl space-y-4">
             <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
               <Calculator className="w-4 h-4" />
               <span>{t('የሚቆረጡና የሚቀናነሱ መጠኖች (Deductions & Withholdings)', 'Deductions & Withholdings')}</span>
@@ -397,54 +455,191 @@ export const OfficerSalaryAdjustmentModal: React.FC<OfficerSalaryAdjustmentModal
               </div>
             </div>
 
-            {/* Editable Specific Deductions */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2">
-              <div>
-                <label className="text-[11px] text-slate-400 block mb-1">
-                  {t('የፖሊስ ብድርና ቁጠባ:', 'Credit Union (ETB):')}
+            {/* Group A: ከግላዊ ተበድሮ ከሆነ የሚቀነስ (Personal Loan Advance) */}
+            <div className="bg-slate-900/90 border border-rose-500/30 p-3.5 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5 text-rose-400" />
+                  {t('ከግል ብድር ቅነሳ (Personal Advance Loan Deduction)', 'Personal Advance Loan Deduction')}
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {t('ከግል የተበደረው ወርሃዊ ተቀናሽ', 'Monthly advance repayment')}
+                </span>
+              </div>
+              <div className="max-w-xs">
+                <label className="text-[11px] text-slate-300 block mb-1">
+                  {t('የግል ብድር ወርሃዊ ቅነሳ መጠን (ብር):', 'Personal Advance Loan (ETB):')}
                 </label>
-                <input
-                  type="number"
-                  value={creditUnionDeduction}
-                  onChange={e => setCreditUnionDeduction(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500"
-                />
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={personalLoanDeduction}
+                    onChange={e => setPersonalLoanDeduction(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-rose-500/40 rounded-lg px-3 py-2 text-xs font-mono font-bold text-rose-300 focus:outline-none focus:border-rose-400"
+                  />
+                  <span className="absolute right-3 top-2 text-[10px] text-rose-400 font-mono">ETB</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Group B: የሰላም ብሩህ ኃ/የተ/ብድርና ቁጠባ ማኅበር (Selam Biruh SACCO items) */}
+            <div className="bg-slate-900/90 border border-sky-500/30 p-3.5 rounded-xl space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-sky-400" />
+                  {t('የሰላም ብሩህ ኃ/የተ/የብድርና ቁጠባ ማኅበር (Selam Biruh SACCO)', 'Selam Biruh Credit & Savings Cooperative')}
+                </span>
+                <span className="text-[10px] text-sky-400 font-mono font-semibold">
+                  ተጠቃሚዎች ብቻ
+                </span>
               </div>
 
-              <div>
-                <label className="text-[11px] text-slate-400 block mb-1">
-                  {t('የጤና መድህን ፈንድ:', 'Health Insurance:')}
-                </label>
-                <input
-                  type="number"
-                  value={healthFundDeduction}
-                  onChange={e => setHealthFundDeduction(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] text-slate-300 block mb-1">
+                    {t('የሰላም ብሩህ ወርሃዊ ቁጠባ:', 'Selam Biruh Savings:')}
+                  </label>
+                  <input
+                    type="number"
+                    value={selamBiruhSavings}
+                    onChange={e => setSelamBiruhSavings(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-sky-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-slate-300 block mb-1">
+                    {t('የሰላም ብሩህ የእጣ ክፍያ:', 'Lottery/Share Installment:')}
+                  </label>
+                  <input
+                    type="number"
+                    value={selamBiruhLotteryShare}
+                    onChange={e => setSelamBiruhLotteryShare(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-sky-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-slate-300 block mb-1">
+                    {t('የሰላም ብሩህ ብድር ቅነሳ:', 'Selam Biruh Loan:')}
+                  </label>
+                  <input
+                    type="number"
+                    value={selamBiruhLoan}
+                    onChange={e => setSelamBiruhLoan(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-rose-300 focus:outline-none focus:border-sky-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-slate-300 block mb-1">
+                    {t('አጠቃላይ የብድርና ቁጠባ ብድር:', 'General SACCO Loan:')}
+                  </label>
+                  <input
+                    type="number"
+                    value={generalCreditLoan}
+                    onChange={e => setGeneralCreditLoan(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-sky-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Group C: የኤችአይቪ፣ የህክምና፣ ሌሎች እና ልዩ ቅነሳዎች (HIV, Medical, Other) */}
+            <div className="bg-slate-900/90 border border-emerald-500/30 p-3.5 rounded-xl space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  <Banknote className="w-3.5 h-3.5 text-emerald-400" />
+                  {t('የኤችአይቪ፣ የህክምና፣ ሌሎች እና ተቋማዊ መዋጮዎች', 'HIV, Medical, Others & Institutional Deductions')}
+                </span>
+                <span className="text-[10px] text-emerald-400">
+                  በፔሮል ባለሙያው በቀጥታ የሚስተካከል
+                </span>
               </div>
 
-              <div>
-                <label className="text-[11px] text-slate-400 block mb-1">
-                  {t('ቀይ መስቀል ማህበር:', 'Red Cross:')}
-                </label>
-                <input
-                  type="number"
-                  value={redCrossDeduction}
-                  onChange={e => setRedCrossDeduction(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500"
-                />
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] text-slate-300 block mb-1 font-semibold">
+                    {t('የኤችአይቪ ፈንድ (HIV):', 'HIV/AIDS Fund:')}
+                  </label>
+                  <input
+                    type="number"
+                    value={hivFundDeduction}
+                    onChange={e => setHivFundDeduction(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-slate-300 block mb-1 font-semibold">
+                    {t('የህክምና መዋጮ:', 'Medical Fund:')}
+                  </label>
+                  <input
+                    type="number"
+                    value={medicalDeduction}
+                    onChange={e => setMedicalDeduction(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="100"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-slate-300 block mb-1 font-semibold">
+                    {t('ልዩ ልዩ / ሌሎች ቅነሳዎች:', 'Other Deductions:')}
+                  </label>
+                  <input
+                    type="number"
+                    value={otherDeductions}
+                    onChange={e => setOtherDeductions(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-slate-400 block mb-1">
+                    {t('ቀይ መስቀል ማህበር:', 'Red Cross:')}
+                  </label>
+                  <input
+                    type="number"
+                    value={redCrossDeduction}
+                    onChange={e => setRedCrossDeduction(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-slate-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-slate-400 block mb-1">
+                    {t('የፖሊስ ብድርና ቁጠባ:', 'Credit Union:')}
+                  </label>
+                  <input
+                    type="number"
+                    value={creditUnionDeduction}
+                    onChange={e => setCreditUnionDeduction(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-slate-500"
+                  />
+                </div>
               </div>
 
-              <div>
+              <div className="pt-2 border-t border-slate-800">
                 <label className="text-[11px] text-slate-400 block mb-1">
-                  {t('የፍርድ ቤት / ዲሲፕሊን ቅጣት:', 'Court/Disciplinary Penalty:')}
+                  {t('የፍርድ ቤት / ዲሲፕሊን ቅጣት (Court / Disciplinary Penalty):', 'Court/Disciplinary Penalty:')}
                 </label>
-                <input
-                  type="number"
-                  value={courtPenalty}
-                  onChange={e => setCourtPenalty(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-rose-300 focus:outline-none focus:border-rose-500"
-                />
+                <div className="max-w-xs">
+                  <input
+                    type="number"
+                    value={courtPenalty}
+                    onChange={e => setCourtPenalty(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0"
+                    className="w-full bg-slate-950 border border-rose-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-rose-300 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
               </div>
             </div>
 

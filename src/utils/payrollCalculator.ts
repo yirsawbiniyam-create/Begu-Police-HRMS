@@ -86,6 +86,7 @@ export const DEFAULT_PAYROLL_CONFIG: PayrollGlobalConfig = {
   standardDeductions: DEFAULT_STANDARD_DEDUCTIONS,
   defaultDutyAllowance: 1200,
   defaultHazardAllowance: 800,
+  defaultRationAllowance: 1500, // የቀለብ ብር መነሻ አበል
   updatedAt: new Date().toISOString(),
   updatedBy: 'የፋይናንስና HR አስተዳደር'
 };
@@ -216,17 +217,22 @@ export function calculateOfficerPayroll(
   const step = customization?.salaryStep ?? member.salaryStep ?? 1;
   const baseSalary = customization?.customBaseSalary ?? member.baseSalary ?? 7000;
 
-  // 2. Allowances
-  const duty = customization?.monthlyAllowances?.duty ?? member.monthlyAllowances.duty ?? 0;
-  const field = customization?.monthlyAllowances?.field ?? member.monthlyAllowances.field ?? 0;
-  const housing = customization?.monthlyAllowances?.housing ?? member.monthlyAllowances.housing ?? 0;
-  const transport = customization?.monthlyAllowances?.transport ?? member.monthlyAllowances.transport ?? 0;
-  const hazard = customization?.monthlyAllowances?.hazard ?? member.monthlyAllowances.hazard ?? 0;
+  // 2. Allowances (including የቀለብ ብር / Ration Allowance)
+  const duty = customization?.monthlyAllowances?.duty ?? member.monthlyAllowances?.duty ?? 0;
+  const field = customization?.monthlyAllowances?.field ?? member.monthlyAllowances?.field ?? 0;
+  const housing = customization?.monthlyAllowances?.housing ?? member.monthlyAllowances?.housing ?? 0;
+  const transport = customization?.monthlyAllowances?.transport ?? member.monthlyAllowances?.transport ?? 0;
+  const hazard = customization?.monthlyAllowances?.hazard ?? member.monthlyAllowances?.hazard ?? 0;
+  const ration =
+    customization?.monthlyAllowances?.ration ??
+    member.monthlyAllowances?.ration ??
+    config.defaultRationAllowance ??
+    1500;
 
   const additional = customization?.additionalAllowances ?? [];
   const additionalTotal = additional.reduce((sum, item) => sum + (item.amount || 0), 0);
 
-  const totalAllowances = duty + field + housing + transport + hazard + additionalTotal;
+  const totalAllowances = duty + field + housing + transport + hazard + ration + additionalTotal;
   const grossSalary = baseSalary + totalAllowances;
 
   // 3. Pension Deductions
@@ -238,44 +244,69 @@ export function calculateOfficerPayroll(
   // 4. Income Tax
   let incomeTax = 0;
   if (config.useStatutoryTaxBrackets) {
-    // Taxable gross usually excludes non-taxable allowances or applies to whole gross
     incomeTax = calculateIncomeTax(grossSalary, config.taxBrackets);
   } else {
     incomeTax = Math.round(grossSalary * (member.taxDeductionRate || 0.15));
   }
 
-  // 5. Standard Institutional Deductions
+  // 5. Standard Institutional Deductions & Credit Associations
   let creditAssociation = customization?.creditAssociationDeduction ?? 150;
   let healthInsurance = customization?.healthInsuranceDeduction ?? 100;
   let redCross = customization?.redCrossDeduction ?? 25;
 
   // Check if standard deduction configs override or disable
-  const creditDeductionConfig = config.standardDeductions.find(d => d.id === 'ded-credit-union');
+  const creditDeductionConfig = config.standardDeductions?.find(d => d.id === 'ded-credit-union');
   if (creditDeductionConfig && !creditDeductionConfig.isActive) {
     creditAssociation = 0;
   }
 
-  const healthDeductionConfig = config.standardDeductions.find(d => d.id === 'ded-health-fund');
+  const healthDeductionConfig = config.standardDeductions?.find(d => d.id === 'ded-health-fund');
   if (healthDeductionConfig && !healthDeductionConfig.isActive) {
     healthInsurance = 0;
   }
 
-  const redCrossDeductionConfig = config.standardDeductions.find(d => d.id === 'ded-red-cross');
+  const redCrossDeductionConfig = config.standardDeductions?.find(d => d.id === 'ded-red-cross');
   if (redCrossDeductionConfig && !redCrossDeductionConfig.isActive) {
     redCross = 0;
   }
 
-  // 6. Court & Custom Deductions
+  // 6. Specialized & Personal Deductions Requested by Regional Police
+  // - ከግል ብድር ቅነሳ (Personal Advance Loan Deduction)
+  const personalLoan = customization?.personalLoanDeduction ?? 0;
+
+  // - የሰላም ብሩህ ኃ/የተ/ብድርና ቁጠባ ማኅበር (Selam Biruh SACCO items)
+  const selamBiruhSavings = customization?.selamBiruhSavings ?? 0;
+  const selamBiruhLotteryShare = customization?.selamBiruhLotteryShare ?? 0;
+  const selamBiruhLoan = customization?.selamBiruhLoan ?? 0;
+  const generalCreditLoan = customization?.generalCreditLoan ?? 0;
+
+  // - የኤችአይቪ ፈንድ (HIV/AIDS Contribution)
+  const hivFund = customization?.hivFundDeduction ?? 0;
+
+  // - የህክምና መዋጮ (Medical Contribution)
+  const medical = customization?.medicalDeduction ?? healthInsurance;
+
+  // - ልዩ ልዩ / ሌሎች ቅነሳዎች (Other Deductions)
+  const other = customization?.otherDeductions ?? 0;
+
+  // 7. Court & Custom Deductions
   const courtPenalty = customization?.courtOrDisciplinaryPenalty ?? 0;
   const customItems = customization?.customDeductions ?? [];
   const customItemsTotal = customItems.reduce((sum, item) => sum + (item.amount || 0), 0);
 
-  // 7. Totals
+  // 8. Totals
   const totalDeductions =
     pensionEmployee +
     incomeTax +
     creditAssociation +
-    healthInsurance +
+    personalLoan +
+    selamBiruhSavings +
+    selamBiruhLotteryShare +
+    selamBiruhLoan +
+    generalCreditLoan +
+    hivFund +
+    medical +
+    other +
     redCross +
     courtPenalty +
     customItemsTotal;
@@ -296,6 +327,7 @@ export function calculateOfficerPayroll(
       housing,
       transport,
       hazard,
+      ration,
       additional,
       totalAllowances
     },
@@ -305,7 +337,15 @@ export function calculateOfficerPayroll(
       pensionEmployer,
       incomeTax,
       creditAssociation,
-      healthInsurance,
+      personalLoan,
+      selamBiruhSavings,
+      selamBiruhLotteryShare,
+      selamBiruhLoan,
+      generalCreditLoan,
+      hivFund,
+      medical,
+      other,
+      healthInsurance: medical,
       redCross,
       courtPenalty,
       customItems,

@@ -22,7 +22,10 @@ import {
   PayrollGlobalConfig,
   RankSalaryGradeScale,
   MemberPayrollCustomization,
-  CalculatedOfficerPayroll
+  CalculatedOfficerPayroll,
+  BenefitItem,
+  DisciplinaryRecord,
+  AwardItem
 } from '../types/hrms';
 import {
   INITIAL_MEMBERS,
@@ -53,7 +56,20 @@ import {
   subscribeToSalaryScales,
   saveSalaryScalesToFirebase,
   subscribeToMemberPayrollCustomizations,
-  saveMemberPayrollCustomizationToFirebase
+  saveMemberPayrollCustomizationToFirebase,
+  subscribeToMembers,
+  saveMemberToFirebase,
+  saveAllMembersToFirebase,
+  saveTrainingToFirestore,
+  saveEvaluationToFirestore,
+  saveLeaveToFirestore,
+  saveBenefitToFirestore,
+  saveDisciplinaryToFirestore,
+  saveAwardToFirestore,
+  saveSeparationToFirestore,
+  saveApplicationToFirestore,
+  saveAuditLogToFirestore,
+  saveNotificationToFirestore
 } from '../services/hrmsFirebase';
 
 interface HrmsContextType {
@@ -83,6 +99,8 @@ interface HrmsContextType {
   applyRankSalaryScaleToAllMembers: (rank: PoliceRank, grade: number, stepIndex: number, newSalary: number) => Promise<{ success: boolean; count: number; message: string }>;
   getCalculatedPayroll: (policeId: string) => CalculatedOfficerPayroll | null;
   allCalculatedPayrolls: CalculatedOfficerPayroll[];
+  sendPayslipReadyNotification: (policeId: string, monthName?: string) => Promise<{ success: boolean; message: string }>;
+  notifyAllMembersPayrollReady: (monthName?: string) => Promise<{ success: boolean; count: number; message: string }>;
 
   currentRole: Role;
   setCurrentRole: (role: Role) => void;
@@ -142,9 +160,12 @@ interface HrmsContextType {
   getMemberByPoliceId: (policeId: string) => MemberProfile | undefined;
   addPromotion: (policeId: string, newRank: PoliceRank, orderNumber: string, remarks?: string) => void;
   executeTransfer: (policeId: string, toDept: DepartmentName, toStation: StationLocation, reason: string, orderRef: string) => void;
-  assignTraining: (policeId: string, training: Omit<TrainingItem, 'id'>) => void;
-  submitPerformanceEvaluation: (policeId: string, evaluation: Omit<PerformanceRecord, 'id'>) => void;
-  addLeaveRecord: (policeId: string, leave: Omit<LeaveRecord, 'id'>) => void;
+  assignTraining: (policeId: string, training: Omit<TrainingItem, 'id'>) => Promise<{ success: boolean; message: string }>;
+  submitPerformanceEvaluation: (policeId: string, evaluation: Omit<PerformanceRecord, 'id'>) => Promise<{ success: boolean; message: string }>;
+  addLeaveRecord: (policeId: string, leave: Omit<LeaveRecord, 'id'>) => Promise<{ success: boolean; message: string }>;
+  addBenefitRecord: (policeId: string, benefit: Omit<BenefitItem, 'id'>) => Promise<{ success: boolean; message: string }>;
+  addDisciplinaryRecord: (policeId: string, record: Omit<DisciplinaryRecord, 'id'>) => Promise<{ success: boolean; message: string }>;
+  addAwardRecord: (policeId: string, award: Omit<AwardItem, 'id'>) => Promise<{ success: boolean; message: string }>;
   uploadPersonnelDocument: (policeId: string, doc: Omit<PersonnelDocument, 'id' | 'uploadedAt' | 'uploadedBy'>) => void;
   processServiceSeparation: (policeId: string, separationData: {
     type: SeparationType;
@@ -378,6 +399,24 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // Real-time Firestore subscription for Member Profiles (Registry)
+  useEffect(() => {
+    const unsubscribe = subscribeToMembers(
+      (remoteMembers: MemberProfile[]) => {
+        if (remoteMembers && remoteMembers.length > 0) {
+          setMembers(remoteMembers);
+        }
+      },
+      err => {
+        console.warn('Members Firestore subscription warning:', err);
+      }
+    );
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
   const updateSystemLogo = async (logoUrl: string, logoName?: string) => {
     setSystemLogo(logoUrl);
     const adminName = currentUser?.fullName || 'HR Admin';
@@ -521,7 +560,8 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
               field: customization.monthlyAllowances?.field ?? m.monthlyAllowances.field,
               housing: customization.monthlyAllowances?.housing ?? m.monthlyAllowances.housing,
               transport: customization.monthlyAllowances?.transport ?? m.monthlyAllowances.transport,
-              hazard: customization.monthlyAllowances?.hazard ?? m.monthlyAllowances.hazard
+              hazard: customization.monthlyAllowances?.hazard ?? m.monthlyAllowances.hazard,
+              ration: customization.monthlyAllowances?.ration ?? m.monthlyAllowances?.ration ?? 1500
             }
           };
         }
@@ -531,6 +571,23 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const ok = await saveMemberPayrollCustomizationToFirebase(customization);
     const member = members.find(m => m.policeId.toUpperCase() === customization.policeId.toUpperCase());
+    
+    // Auto-alert member of deduction or allowance modifications
+    if (member) {
+      const calc = calculateOfficerPayroll(member, payrollConfig, customization);
+      const notifItem: NotificationItem = {
+        id: `notif-payroll-adj-${Date.now()}`,
+        title: 'በደመወዝ ቅነሳ ወይም አበል ላይ ማስተካከያ ተደርጓል',
+        message: `የአባል ${member.identity.fullName} (${member.policeId}) የደመወዝ ቅነሳዎችና አበል በፔሮል ባለሙያ ተስተካክለዋል። አዲሱ የተጣራ ክፍያ (Net Pay): ${calc.netPay.toLocaleString()} ETB | የቀለብ ብር: ${calc.allowances.ration.toLocaleString()} ETB | አጠቃላይ ቅነሳ: ${calc.deductions.totalDeductions.toLocaleString()} ETB። በSelf-Service ፖርታል መመልከት ይችላሉ።`,
+        date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        isRead: false,
+        type: 'salary',
+        targetPoliceId: member.policeId,
+        linkTab: 'self_service'
+      };
+      setNotifications(prev => [notifItem, ...prev]);
+    }
+
     addAuditLog({
       user: currentUser?.fullName || currentUser?.username || 'HR/Payroll Specialist',
       role: currentRole,
@@ -543,8 +600,81 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       success: ok,
       message: ok
-        ? t('የአባሉ ደመወዝ ማስተካከያ በፋየርስቶር ተቀምጧል!', 'Member payroll adjustment saved to Firestore!')
+        ? t('የአባሉ ደመወዝና ቅነሳዎች በፋየርስቶር ተቀምጠዋል! ለአባሉ ማሳወቂያ በራስ-ሰር ተልኳል።', 'Member payroll & deductions saved to Firestore! Member auto-notified.')
         : t('ተቀምጧል (ከመስመር ውጭ)', 'Saved locally')
+    };
+  };
+
+  const sendPayslipReadyNotification = async (policeId: string, monthName: string = 'የመስከረም 2026') => {
+    const member = members.find(m => m.policeId.toUpperCase() === policeId.toUpperCase());
+    if (!member) {
+      return { success: false, message: 'አባሉ አልተገኘም' };
+    }
+
+    const calc = calculateOfficerPayroll(member, payrollConfig, memberPayrollCustomizations[member.policeId.toUpperCase()]);
+    const notifItem: NotificationItem = {
+      id: `notif-slip-${Date.now()}-${member.policeId}`,
+      title: `${monthName} ወርሃዊ የደመወዝ ስሊፕ ዝግጁ ሆኗል`,
+      message: `ውድ አባል ${member.identity.fullName} (${member.policeId})፣ የ${monthName} ወርሃዊ የደመወዝ ፔይስሊፕዎ ተዘጋጅቷል። የተጣራ ክፍያ (Net Pay): ${calc.netPay.toLocaleString()} ETB (የቀለብ ብር: ${calc.allowances.ration.toLocaleString()} ETB ጨምሮ)። በSelf-Service ፖርታል ገብተው መመልከትና ማተም ይችላሉ።`,
+      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      isRead: false,
+      type: 'salary',
+      targetPoliceId: member.policeId,
+      linkTab: 'self_service'
+    };
+
+    setNotifications(prev => [notifItem, ...prev]);
+    return {
+      success: true,
+      message: `ለአባል ${member.identity.fullName} (${member.policeId}) የስሊፕ ዝግጁነት ማሳወቂያ በተሳካ ሁኔታ ተልኳል!`
+    };
+  };
+
+  const notifyAllMembersPayrollReady = async (monthName: string = 'የመስከረም 2026') => {
+    const eligibleMembers = members.filter(
+      m => m.status === 'active' || m.status === 'on_leave' || m.status === 'transferred_pending'
+    );
+
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    const memberNotifs: NotificationItem[] = eligibleMembers.map(m => {
+      const calc = calculateOfficerPayroll(m, payrollConfig, memberPayrollCustomizations[m.policeId.toUpperCase()]);
+      return {
+        id: `notif-bulk-slip-${Date.now()}-${m.policeId}`,
+        title: `${monthName} ወርሃዊ የደመወዝ ስሊፕ ዝግጁ ሆኗል`,
+        message: `ውድ አባል ${m.identity.fullName} (${m.policeId})፣ የ${monthName} ወርሃዊ የደመወዝ ፔይስሊፕዎ ተዘጋጅቷል። የተጣራ ክፍያ (Net Pay): ${calc.netPay.toLocaleString()} ETB (የቀለብ ብር: ${calc.allowances.ration.toLocaleString()} ETB ጨምሮ)። በSelf-Service ፖርታል ገብተው ማየትና ማተም ይችላሉ።`,
+        date: nowStr,
+        isRead: false,
+        type: 'salary',
+        targetPoliceId: m.policeId,
+        linkTab: 'self_service'
+      };
+    });
+
+    const institutionalAlert: NotificationItem = {
+      id: `notif-inst-${Date.now()}`,
+      title: `የ${monthName} ወርሃዊ የደመወዝ ስሊፕ ለሁሉም አባላት ተለቋል`,
+      message: `የ${monthName} ወርሃዊ የደመወዝ ክፍያ ስሌት ተጠናቆ ለ${eligibleMembers.length} ንቁ የፖሊስ አባላት የደመወዝ ስሊፕ በSelf-Service ፖርታል ላይ በይፋ ተለቋል።`,
+      date: nowStr,
+      isRead: false,
+      type: 'salary',
+      linkTab: 'self_service'
+    };
+
+    setNotifications(prev => [institutionalAlert, ...memberNotifs, ...prev]);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'Payroll Specialist',
+      role: currentRole,
+      action: `ወርሃዊ የደመወዝ ስሊፕ ማሳወቂያ ለ${eligibleMembers.length} አባላት በራስ-ሰር ተላከ (${monthName})`,
+      targetPoliceId: 'ALL-POLICE-MEMBERS',
+      targetMemberName: 'ሁሉም ንቁ የፖሊስ አባላት',
+      category: 'salary'
+    });
+
+    return {
+      success: true,
+      count: eligibleMembers.length,
+      message: `ለ${eligibleMembers.length} የፖሊስ አባላት ወርሃዊ የደመወዝ ስሊፕ ማሳወቂያ በራስ-ሰር ተልኳል!`
     };
   };
 
@@ -653,6 +783,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ipAddress: '192.168.10.' + Math.floor(Math.random() * 50 + 1)
     };
     setAuditLogs(prev => [newLog, ...prev]);
+    saveAuditLogToFirestore(newLog);
   };
 
   // Helper to open a full digital personnel file taking the member's photo from the ID system
@@ -1305,8 +1436,8 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, message: `የአባል ${member.identity.fullName} የመታወቂያ መረጃ በተሳካ ሁኔታ ተመሳስሏል!` };
   };
 
-  // Member HR mutations
-  const addPromotion = (policeId: string, newRank: PoliceRank, orderNumber: string, remarks?: string) => {
+  // Member HR mutations (persisted to Firestore & local storage)
+  const addPromotion = async (policeId: string, newRank: PoliceRank, orderNumber: string, remarks?: string) => {
     const member = getMemberByPoliceId(policeId);
     if (!member) return;
 
@@ -1320,21 +1451,20 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       remarks
     };
 
+    const updatedMember: MemberProfile = {
+      ...member,
+      currentRank: newRank,
+      rankHistory: [historyItem, ...(member.rankHistory || [])]
+    };
+
     setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId === policeId) {
-          return {
-            ...m,
-            currentRank: newRank,
-            rankHistory: [historyItem, ...m.rankHistory]
-          };
-        }
-        return m;
-      })
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
     );
 
+    await saveMemberToFirebase(updatedMember);
+
     addAuditLog({
-      user: 'HR-Admin-001',
+      user: currentUser?.fullName || 'HR-Admin-001',
       role: currentRole,
       action: `የማዕረግ እድገት ተመዘገበ: ${oldRank} ➜ ${newRank}`,
       targetPoliceId: policeId,
@@ -1346,7 +1476,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const executeTransfer = (
+  const executeTransfer = async (
     policeId: string,
     toDept: DepartmentName,
     toStation: StationLocation,
@@ -1373,23 +1503,22 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       orderRef
     };
 
+    const updatedMember: MemberProfile = {
+      ...member,
+      currentDepartment: toDept,
+      currentStation: toStation,
+      status: 'active',
+      transferHistory: [transferItem, ...(member.transferHistory || [])]
+    };
+
     setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId === policeId) {
-          return {
-            ...m,
-            currentDepartment: toDept,
-            currentStation: toStation,
-            status: 'active',
-            transferHistory: [transferItem, ...m.transferHistory]
-          };
-        }
-        return m;
-      })
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
     );
 
+    await saveMemberToFirebase(updatedMember);
+
     addAuditLog({
-      user: 'HR-Admin-001',
+      user: currentUser?.fullName || 'HR-Admin-001',
       role: currentRole,
       action: `የአባል ዝውውር ተፈጸመ: ${oldDept} (${oldStation}) ➜ ${toDept} (${toStation})`,
       targetPoliceId: policeId,
@@ -1401,29 +1530,30 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const assignTraining = (policeId: string, training: Omit<TrainingItem, 'id'>) => {
+  const assignTraining = async (policeId: string, training: Omit<TrainingItem, 'id'>): Promise<{ success: boolean; message: string }> => {
     const member = getMemberByPoliceId(policeId);
-    if (!member) return;
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
 
     const newTraining: TrainingItem = {
       ...training,
       id: `tr-${Date.now()}`
     };
 
+    const updatedMember: MemberProfile = {
+      ...member,
+      trainingHistory: [newTraining, ...(member.trainingHistory || [])]
+    };
+
     setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId === policeId) {
-          return {
-            ...m,
-            trainingHistory: [newTraining, ...m.trainingHistory]
-          };
-        }
-        return m;
-      })
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
     );
 
+    // Save full member to Firestore AND individual training record
+    await saveMemberToFirebase(updatedMember);
+    await saveTrainingToFirestore(policeId, member.identity.fullName, newTraining);
+
     addAuditLog({
-      user: 'Training-Directorate',
+      user: currentUser?.fullName || 'Training-Directorate',
       role: currentRole,
       action: `አዲስ ስልጠና ተመደበ: ${training.title}`,
       targetPoliceId: policeId,
@@ -1431,31 +1561,34 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       category: 'training',
       newValue: training.title
     });
+
+    return { success: true, message: `ስልጠና ${training.title} በተሳካ ሁኔታ ተመዝግቧል እና በፋየርስቶር ተቀምጧል!` };
   };
 
-  const submitPerformanceEvaluation = (policeId: string, evaluation: Omit<PerformanceRecord, 'id'>) => {
+  const submitPerformanceEvaluation = async (policeId: string, evaluation: Omit<PerformanceRecord, 'id'>): Promise<{ success: boolean; message: string }> => {
     const member = getMemberByPoliceId(policeId);
-    if (!member) return;
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
 
     const newEval: PerformanceRecord = {
       ...evaluation,
       id: `pf-${Date.now()}`
     };
 
+    const updatedMember: MemberProfile = {
+      ...member,
+      performanceHistory: [newEval, ...(member.performanceHistory || [])]
+    };
+
     setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId === policeId) {
-          return {
-            ...m,
-            performanceHistory: [newEval, ...m.performanceHistory]
-          };
-        }
-        return m;
-      })
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
     );
 
+    // Save full member to Firestore AND individual evaluation record
+    await saveMemberToFirebase(updatedMember);
+    await saveEvaluationToFirestore(policeId, member.identity.fullName, newEval);
+
     addAuditLog({
-      user: evaluation.supervisorName,
+      user: evaluation.supervisorName || currentUser?.fullName || 'Supervisor',
       role: currentRole,
       action: `የአፈጻጸም/Efficiency ውጤት ተመዘገበ: ${evaluation.score}/100 (${evaluation.rating})`,
       targetPoliceId: policeId,
@@ -1463,39 +1596,42 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       category: 'application',
       newValue: `${evaluation.evaluationPeriod}: ${evaluation.score}%`
     });
+
+    return { success: true, message: 'የአፈጻጸም ምዘና ውጤቱ በተሳካ ሁኔታ ተመዝግቦ በፋየርስቶር ተቀምጧል!' };
   };
 
-  const addLeaveRecord = (policeId: string, leave: Omit<LeaveRecord, 'id'>) => {
+  const addLeaveRecord = async (policeId: string, leave: Omit<LeaveRecord, 'id'>): Promise<{ success: boolean; message: string }> => {
     const member = getMemberByPoliceId(policeId);
-    if (!member) return;
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
 
     const newLeave: LeaveRecord = {
       ...leave,
       id: `lh-${Date.now()}`
     };
 
+    const used = (member.leaveBalance?.annualUsed || 0) + leave.durationDays;
+    const remaining = Math.max(0, (member.leaveBalance?.annualTotal || 30) - used);
+    const updatedMember: MemberProfile = {
+      ...member,
+      status: 'on_leave',
+      leaveBalance: {
+        ...(member.leaveBalance || { annualTotal: 30, annualUsed: 0, annualRemaining: 30, sickUsed: 0, specialUsed: 0 }),
+        annualUsed: used,
+        annualRemaining: remaining
+      },
+      leaveHistory: [newLeave, ...(member.leaveHistory || [])]
+    };
+
     setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId === policeId) {
-          const used = m.leaveBalance.annualUsed + leave.durationDays;
-          const remaining = Math.max(0, m.leaveBalance.annualTotal - used);
-          return {
-            ...m,
-            status: 'on_leave',
-            leaveBalance: {
-              ...m.leaveBalance,
-              annualUsed: used,
-              annualRemaining: remaining
-            },
-            leaveHistory: [newLeave, ...m.leaveHistory]
-          };
-        }
-        return m;
-      })
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
     );
 
+    // Save full member to Firestore AND individual leave record
+    await saveMemberToFirebase(updatedMember);
+    await saveLeaveToFirestore(policeId, member.identity.fullName, newLeave);
+
     addAuditLog({
-      user: 'HR-Officer',
+      user: currentUser?.fullName || 'HR-Officer',
       role: currentRole,
       action: `የእረፍት ፈቃድ ተፈቀደ: ${leave.durationDays} ቀናት (${leave.leaveType})`,
       targetPoliceId: policeId,
@@ -1503,9 +1639,118 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       category: 'leave',
       newValue: `${leave.startDate} to ${leave.endDate}`
     });
+
+    return { success: true, message: `የ${leave.durationDays} ቀናት ፈቃድ በተሳካ ሁኔታ ተመዝግቧል እና በፋየርስቶር ተቀምጧል!` };
   };
 
-  const uploadPersonnelDocument = (
+  const addBenefitRecord = async (policeId: string, benefit: Omit<BenefitItem, 'id'>): Promise<{ success: boolean; message: string }> => {
+    const member = getMemberByPoliceId(policeId);
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
+
+    const newBenefit: BenefitItem = {
+      ...benefit,
+      id: `ben-${Date.now()}`
+    };
+
+    const updatedMember: MemberProfile = {
+      ...member,
+      benefits: [newBenefit, ...(member.benefits || [])]
+    };
+
+    setMembers(prev =>
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
+    );
+
+    // Save full member to Firestore AND individual benefit record
+    await saveMemberToFirebase(updatedMember);
+    await saveBenefitToFirestore(policeId, member.identity.fullName, newBenefit);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'HR-Admin',
+      role: currentRole,
+      action: `አዲስ ጥቅማጥቅም ተመደበ: ${benefit.title} (${benefit.monthlyAmount > 0 ? benefit.monthlyAmount.toLocaleString() + ' ETB' : 'ሙሉ ሽፋን'})`,
+      targetPoliceId: policeId,
+      targetMemberName: member.identity.fullName,
+      category: 'salary',
+      newValue: benefit.title
+    });
+
+    return { success: true, message: `ጥቅማጥቅም ${benefit.title} በተሳካ ሁኔታ ተመዝግቧል እና በፋየርስቶር ተቀምጧል!` };
+  };
+
+  const addDisciplinaryRecord = async (policeId: string, record: Omit<DisciplinaryRecord, 'id'>): Promise<{ success: boolean; message: string }> => {
+    const member = getMemberByPoliceId(policeId);
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
+
+    const newRecord: DisciplinaryRecord = {
+      ...record,
+      id: `disc-${Date.now()}`
+    };
+
+    const updatedMember: MemberProfile = {
+      ...member,
+      disciplinaryRecords: [newRecord, ...(member.disciplinaryRecords || [])]
+    };
+
+    setMembers(prev =>
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
+    );
+
+    // Save full member to Firestore AND individual disciplinary record
+    await saveMemberToFirebase(updatedMember);
+    await saveDisciplinaryToFirestore(policeId, member.identity.fullName, newRecord);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'HR-Admin',
+      role: currentRole,
+      action: `የዲሲፕሊን እርምጃ ተመዘገበ: ${record.incident} ➜ ${record.measureTaken}`,
+      targetPoliceId: policeId,
+      targetMemberName: member.identity.fullName,
+      category: 'document',
+      newValue: record.measureTaken,
+      approvalReference: record.verdictRef
+    });
+
+    return { success: true, message: 'የዲሲፕሊን እርምጃው በተሳካ ሁኔታ ተመዝግቦ በፋየርስቶር ተቀምጧል!' };
+  };
+
+  const addAwardRecord = async (policeId: string, award: Omit<AwardItem, 'id'>): Promise<{ success: boolean; message: string }> => {
+    const member = getMemberByPoliceId(policeId);
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
+
+    const newAward: AwardItem = {
+      ...award,
+      id: `awd-${Date.now()}`
+    };
+
+    const updatedMember: MemberProfile = {
+      ...member,
+      awardsAndHonors: [newAward, ...(member.awardsAndHonors || [])]
+    };
+
+    setMembers(prev =>
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
+    );
+
+    // Save full member to Firestore AND individual award record
+    await saveMemberToFirebase(updatedMember);
+    await saveAwardToFirestore(policeId, member.identity.fullName, newAward);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'HR-Admin',
+      role: currentRole,
+      action: `የክብር ሽልማት/ሜዳሊያ ተመዘገበ: ${award.title} (${award.awardedBy})`,
+      targetPoliceId: policeId,
+      targetMemberName: member.identity.fullName,
+      category: 'document',
+      newValue: award.title,
+      approvalReference: award.medalOrCertRef
+    });
+
+    return { success: true, message: 'የክብር ሽልማቱ በተሳካ ሁኔታ ተመዝግቦ በፋየርስቶር ተቀምጧል!' };
+  };
+
+  const uploadPersonnelDocument = async (
     policeId: string,
     doc: Omit<PersonnelDocument, 'id' | 'uploadedAt' | 'uploadedBy'>
   ) => {
@@ -1516,23 +1761,22 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...doc,
       id: `doc-${Date.now()}`,
       uploadedAt: new Date().toISOString().substring(0, 10),
-      uploadedBy: currentRole === 'member' ? member.identity.fullName : 'HR-Admin'
+      uploadedBy: currentRole === 'member' ? member.identity.fullName : (currentUser?.fullName || 'HR-Admin')
+    };
+
+    const updatedMember: MemberProfile = {
+      ...member,
+      documents: [newDoc, ...(member.documents || [])]
     };
 
     setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId === policeId) {
-          return {
-            ...m,
-            documents: [newDoc, ...m.documents]
-          };
-        }
-        return m;
-      })
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
     );
 
+    await saveMemberToFirebase(updatedMember);
+
     addAuditLog({
-      user: currentRole === 'member' ? member.identity.fullName : 'HR-Admin',
+      user: currentRole === 'member' ? member.identity.fullName : (currentUser?.fullName || 'HR-Admin'),
       role: currentRole,
       action: `አዲስ ሰነድ በማህደር ላይ ተያያዘ: ${doc.title} (${doc.documentType})`,
       targetPoliceId: policeId,
@@ -1542,7 +1786,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const processServiceSeparation = (
+  const processServiceSeparation = async (
     policeId: string,
     separationData: {
       type: SeparationType;
@@ -1552,9 +1796,9 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pensionBookRef?: string;
       decisionDocUrl?: string;
     }
-  ) => {
+  ): Promise<{ success: boolean; message: string }> => {
     const member = getMemberByPoliceId(policeId);
-    if (!member) return;
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
 
     // calculate service years
     const empYear = parseInt(member.employmentDate.substring(0, 4), 10);
@@ -1582,47 +1826,50 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80',
       fileType: 'image',
       fileSizeText: '1.9 MB',
-      uploadedBy: 'HR-Admin',
+      uploadedBy: currentUser?.fullName || 'HR-Admin',
       uploadedAt: new Date().toISOString().substring(0, 10)
     };
 
+    const separationRecord = {
+      id: `sep-${Date.now()}`,
+      separationType: separationData.type,
+      separationDate: new Date().toISOString().substring(0, 10),
+      totalServiceYears: serviceYears,
+      lastRank: member.currentRank,
+      lastSalaryGrade: member.salaryGrade,
+      lastSalaryStep: member.salaryStep,
+      reason: separationData.reason,
+      decisionRef: separationData.decisionRef,
+      decisionDocumentUrl: separationDoc.fileUrl,
+      approvedBy: 'የኮሚሽኑ አዛዥ ጽ/ቤት',
+      approvalDate: new Date().toISOString().substring(0, 10),
+      pensionEligible: separationData.pensionEligible,
+      pensionBookRef: separationData.pensionBookRef,
+      clearanceCompleted: true,
+      auditNote: 'የንብረት፣ ትጥቅና ፋይናንስ ክሊራንስ ተጠናቋል'
+    };
+
+    const updatedMember: MemberProfile = {
+      ...member,
+      status: newStatus,
+      documents: [separationDoc, ...member.documents],
+      separation: separationRecord,
+      userAccount: {
+        ...member.userAccount,
+        isActive: false
+      }
+    };
+
     setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId === policeId) {
-          return {
-            ...m,
-            status: newStatus,
-            documents: [separationDoc, ...m.documents],
-            separation: {
-              id: `sep-${Date.now()}`,
-              separationType: separationData.type,
-              separationDate: new Date().toISOString().substring(0, 10),
-              totalServiceYears: serviceYears,
-              lastRank: m.currentRank,
-              lastSalaryGrade: m.salaryGrade,
-              lastSalaryStep: m.salaryStep,
-              reason: separationData.reason,
-              decisionRef: separationData.decisionRef,
-              decisionDocumentUrl: separationDoc.fileUrl,
-              approvedBy: 'የኮሚሽኑ አዛዥ ጽ/ቤት',
-              approvalDate: new Date().toISOString().substring(0, 10),
-              pensionEligible: separationData.pensionEligible,
-              pensionBookRef: separationData.pensionBookRef,
-              clearanceCompleted: true,
-              auditNote: 'የንብረት፣ ትጥቅና ፋይናንስ ክሊራንስ ተጠናቋል'
-            },
-            userAccount: {
-              ...m.userAccount,
-              isActive: false
-            }
-          };
-        }
-        return m;
-      })
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
     );
 
+    // Save full member to Firestore AND individual separation collection
+    await saveMemberToFirebase(updatedMember);
+    await saveSeparationToFirestore(policeId, member.identity.fullName, separationRecord);
+
     addAuditLog({
-      user: 'HR-Administrator',
+      user: currentUser?.fullName || 'HR-Administrator',
       role: currentRole,
       action: `የአገልግሎት ስንብት ጸድቆ ተመዘገበ: ${separationData.type}`,
       targetPoliceId: policeId,
@@ -1632,31 +1879,35 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       newValue: `${newStatus} (${serviceYears} ዓመት አገልግሎት)`,
       approvalReference: separationData.decisionRef
     });
+
+    return {
+      success: true,
+      message: `የአገልግሎት ስንብትና የጡረታ ሰነድ በተሳካ ሁኔታ ተመዝግቦ በፋየርስቶር ተቀምጧል!`
+    };
   };
 
-  const updateSalaryGradeStep = (policeId: string, grade: number, step: number, reason: string) => {
+  const updateSalaryGradeStep = async (policeId: string, grade: number, step: number, reason: string) => {
     const member = getMemberByPoliceId(policeId);
     if (!member) return;
 
     const oldSal = member.baseSalary;
     const newSal = SALARY_SCALE_MATRIX[grade]?.[step - 1] || oldSal;
 
+    const updatedMember: MemberProfile = {
+      ...member,
+      salaryGrade: grade,
+      salaryStep: step,
+      baseSalary: newSal
+    };
+
     setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId === policeId) {
-          return {
-            ...m,
-            salaryGrade: grade,
-            salaryStep: step,
-            baseSalary: newSal
-          };
-        }
-        return m;
-      })
+      prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m)
     );
 
+    await saveMemberToFirebase(updatedMember);
+
     addAuditLog({
-      user: 'Payroll-Officer',
+      user: currentUser?.fullName || 'Payroll-Officer',
       role: currentRole,
       action: `የደመወዝ እርከን/Step ማስተካከያ: Grade ${grade}, Step ${step} (${newSal.toLocaleString()} ETB)`,
       targetPoliceId: policeId,
@@ -1708,6 +1959,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setApplications(prev => [newApp, ...prev]);
+    saveApplicationToFirestore(newApp);
 
     addAuditLog({
       user: member.identity.fullName,
@@ -2161,6 +2413,9 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
         assignTraining,
         submitPerformanceEvaluation,
         addLeaveRecord,
+        addBenefitRecord,
+        addDisciplinaryRecord,
+        addAwardRecord,
         uploadPersonnelDocument,
         processServiceSeparation,
         updateSalaryGradeStep,
@@ -2173,6 +2428,8 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
         applyRankSalaryScaleToAllMembers,
         getCalculatedPayroll,
         allCalculatedPayrolls,
+        sendPayslipReadyNotification,
+        notifyAllMembersPayrollReady,
         submitApplication,
         reviewApplication,
         markNotificationRead,

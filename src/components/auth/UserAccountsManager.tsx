@@ -400,15 +400,15 @@ export const UserAccountsManager: React.FC = () => {
                               onClick={() => handleOpenProvisionModal(m)}
                               className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 shadow-sm transition-all ${
                                 hasAccount
-                                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                                  : 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black'
+                                  ? 'bg-sky-600/20 hover:bg-sky-600 text-sky-200 hover:text-white border border-sky-500/40'
+                                  : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black'
                               }`}
                             >
                               <KeyRound className="w-3.5 h-3.5" />
                               <span>
                                 {hasAccount
-                                  ? t('መለያ አሻሽል / ቀይር', 'Reset Login')
-                                  : t('የመግቢያ መለያ ስጥ', 'Provision Login')}
+                                  ? t('የይለፍ ቃል ቀይርና ስጥ', 'Reset & Handover')
+                                  : t('መለያ ፍጠርና ስጥ', 'Create & Handover')}
                               </span>
                             </button>
                           </td>

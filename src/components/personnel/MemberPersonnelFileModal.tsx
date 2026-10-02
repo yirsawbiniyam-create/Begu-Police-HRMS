@@ -58,9 +58,13 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
     assignTraining,
     submitPerformanceEvaluation,
     addLeaveRecord,
+    addBenefitRecord,
+    addDisciplinaryRecord,
+    addAwardRecord,
     uploadPersonnelDocument,
     processServiceSeparation,
-    updateSalaryGradeStep
+    updateSalaryGradeStep,
+    getCalculatedPayroll
   } = useHrms();
 
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -88,49 +92,87 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
   const [trInst, setTrInst] = useState('የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሌጅ');
   const [trStart, setTrStart] = useState('2026-10-01');
   const [trEnd, setTrEnd] = useState('2026-12-01');
+  const [trCertRef, setTrCertRef] = useState(`CERT-POL-${Math.floor(Math.random() * 8000 + 1000)}`);
+  const [trStatus, setTrStatus] = useState<'የተጠናቀቀ' | 'በሂደት ላይ' | 'የተመደበ'>('የተጠናቀቀ');
+  const [trGrade, setTrGrade] = useState('እጅግ የላቀ (A)');
 
   // 4. Performance
   const [evalScore, setEvalScore] = useState(88);
   const [evalPeriod, setEvalPeriod] = useState('2018 ዓ.ም - 1ኛ ሩብ ዓመት');
+  const [evalYear, setEvalYear] = useState(2026);
+  const [evalRating, setEvalRating] = useState<'እጅግ የላቀ (90-100)' | 'ከፍተኛ (80-89)' | 'መካከለኛ (65-79)' | 'ዝቅተኛ (<65)'>('ከፍተኛ (80-89)');
   const [evalStrength, setEvalStrength] = useState('የስራ ዲሲፕሊንና ተልእኮዎችን በሰዓቱ ማጠናቀቅ');
   const [evalImprove, setEvalImprove] = useState('የሪፖርት አቀራረብ ክህሎትን ማሻሻል');
+  const [evalDecision, setEvalDecision] = useState('ለማዕረግ እድገትና ተጨማሪ ኃላፊነት ብቁ ነው');
+  const [evalSupName, setEvalSupName] = useState('ዋና ኢንስፔክተር ታደሰ በቀለ');
+  const [evalSupRank, setEvalSupRank] = useState('ዋና ኢንስፔክተር');
 
   // 5. Leave
   const [leaveDays, setLeaveDays] = useState(10);
   const [leaveType, setLeaveType] = useState<any>('ዓመታዊ እረፍት');
   const [leaveStart, setLeaveStart] = useState('2026-10-05');
+  const [leaveEnd, setLeaveEnd] = useState('2026-10-15');
   const [leaveReason, setLeaveReason] = useState('ዓመታዊ ፈቃድ');
 
-  // 6. Salary adjustment
+  // 6. Benefits
+  const [benTitle, setBenTitle] = useState('የአደጋ ስጋት ልዩ አበል');
+  const [benType, setBenType] = useState<'housing' | 'transport' | 'duty' | 'field' | 'medical' | 'hazard'>('hazard');
+  const [benAmount, setBenAmount] = useState(1200);
+  const [benStart, setBenStart] = useState('2026-10-01');
+  const [benStatus, setBenStatus] = useState<'active' | 'inactive'>('active');
+  const [benRemarks, setBenRemarks] = useState('የፀጥታ ስምሪት ሽፋን');
+
+  // 7. Disciplinary
+  const [discIncident, setDiscIncident] = useState('የስራ ሰዓት ያለፈቃድ ማሳለፍ');
+  const [discMeasure, setDiscMeasure] = useState('የፅሁፍ ማስጠንቀቂያና የ100 ብር ቅጣት');
+  const [discDate, setDiscDate] = useState(new Date().toISOString().substring(0, 10));
+  const [discRef, setDiscRef] = useState(`DISC/BG/${new Date().getFullYear()}/${Math.floor(Math.random() * 500 + 100)}`);
+  const [discStatus, setDiscStatus] = useState<'የተዘጋ' | 'በክትትል ላይ'>('የተዘጋ');
+
+  // 8. Awards
+  const [awdTitle, setAwdTitle] = useState('የላቀ የጀግንነት ሜዳሊያና የክብር ሰርተፊኬት');
+  const [awdReason, setAwdReason] = useState('በህዳሴ ግድብ አካባቢ የህዝብ ሰላምና ደህንነት በማስከበር ላሳዩት የላቀ ጀግንነት');
+  const [awdDate, setAwdDate] = useState(new Date().toISOString().substring(0, 10));
+  const [awdBy, setAwdBy] = useState('የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሚሽነር');
+  const [awdRef, setAwdRef] = useState(`MED/HON/${new Date().getFullYear()}/${Math.floor(Math.random() * 400 + 100)}`);
+
+  // 9. Salary adjustment
   const [adjGrade, setAdjGrade] = useState(member.salaryGrade);
   const [adjStep, setAdjStep] = useState(Math.min(9, member.salaryStep + 1));
   const [adjReason, setAdjReason] = useState('የዓመታዊ እርከን እድገት (Annual Step Increment)');
 
-  // 7. Separation
+  // 10. Separation
   const [sepType, setSepType] = useState<SeparationType>('በጡረታ የተሰናበተ (Retirement)');
   const [sepReason, setSepReason] = useState('የህግ የጡረታ እድሜ በመድረሱ በክብር የተሰናበተ');
   const [sepRef, setSepRef] = useState(`DEC/SEP/${new Date().getFullYear()}/${Math.floor(Math.random() * 900 + 100)}`);
   const [sepPension, setSepPension] = useState(true);
   const [sepPensionBook, setSepPensionBook] = useState(`PEN-BG-2026-${Math.floor(Math.random() * 9000 + 1000)}`);
 
-  // 8. Document upload
+  // 11. Document upload
   const [docTitle, setDocTitle] = useState('');
   const [docType, setDocType] = useState<any>('ደብዳቤ');
   const [docRef, setDocRef] = useState(`BG/POL/DOC/${new Date().getFullYear()}/${Math.floor(Math.random() * 900 + 100)}`);
   const [docDate, setDocDate] = useState(new Date().toISOString().substring(0, 10));
   const [docNotes, setDocNotes] = useState('');
 
-  // Calculate gross and net salary
-  const allowancesTotal =
-    member.monthlyAllowances.duty +
-    member.monthlyAllowances.field +
-    member.monthlyAllowances.housing +
-    member.monthlyAllowances.transport +
-    member.monthlyAllowances.hazard;
-  const grossSalary = member.baseSalary + allowancesTotal;
-  const pensionDeduction = Math.round(member.baseSalary * member.pensionDeductionRate);
-  const taxDeduction = Math.round(grossSalary * member.taxDeductionRate);
-  const netSalary = grossSalary - pensionDeduction - taxDeduction;
+  // Calculate gross and net salary with live payroll engine
+  const liveCalc = getCalculatedPayroll(member.policeId);
+  const allowancesTotal = liveCalc
+    ? liveCalc.allowances.totalAllowances
+    : member.monthlyAllowances.duty +
+      member.monthlyAllowances.field +
+      member.monthlyAllowances.housing +
+      member.monthlyAllowances.transport +
+      member.monthlyAllowances.hazard +
+      (member.monthlyAllowances.ration || 1500);
+  const grossSalary = liveCalc ? liveCalc.grossSalary : member.baseSalary + allowancesTotal;
+  const pensionDeduction = liveCalc
+    ? liveCalc.deductions.pensionEmployee
+    : Math.round(member.baseSalary * (member.pensionDeductionRate || 0.07));
+  const taxDeduction = liveCalc
+    ? liveCalc.deductions.incomeTax
+    : Math.round(grossSalary * (member.taxDeductionRate || 0.15));
+  const netSalary = liveCalc ? liveCalc.netPay : grossSalary - pensionDeduction - taxDeduction;
 
   const tabs = [
     { id: 'overview', label: t('አጠቃላይ መረጃ', 'Overview'), icon: User },
@@ -585,27 +627,34 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-300">{t('መሰረታዊ ደመወዝ', 'Base Salary')}</span>
-                      <span className="font-mono text-white">{member.baseSalary.toLocaleString()} ETB</span>
+                      <span className="font-mono text-white">{(liveCalc?.baseSalary ?? member.baseSalary).toLocaleString()} ETB</span>
                     </div>
+
+                    {/* የቀለብ ብር (Ration Allowance) */}
+                    <div className="flex justify-between bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
+                      <span className="text-amber-300 font-bold">⭐ {t('የቀለብ ብር (Ration)', 'Ration Allowance')}</span>
+                      <span className="font-mono text-amber-300 font-bold">+{(liveCalc?.allowances.ration ?? member.monthlyAllowances.ration ?? 1500).toLocaleString()} ETB</span>
+                    </div>
+
                     <div className="flex justify-between">
                       <span className="text-slate-400">{t('የስራ ኃላፊነት አበል', 'Duty Allowance')}</span>
-                      <span className="font-mono text-slate-200">{member.monthlyAllowances.duty.toLocaleString()} ETB</span>
+                      <span className="font-mono text-slate-200">{(liveCalc?.allowances.duty ?? member.monthlyAllowances.duty).toLocaleString()} ETB</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">{t('የሜዳ/ተልዕኮ አበል', 'Field Allowance')}</span>
-                      <span className="font-mono text-slate-200">{member.monthlyAllowances.field.toLocaleString()} ETB</span>
+                      <span className="font-mono text-slate-200">{(liveCalc?.allowances.field ?? member.monthlyAllowances.field).toLocaleString()} ETB</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">{t('የቤት አበል', 'Housing Allowance')}</span>
-                      <span className="font-mono text-slate-200">{member.monthlyAllowances.housing.toLocaleString()} ETB</span>
+                      <span className="font-mono text-slate-200">{(liveCalc?.allowances.housing ?? member.monthlyAllowances.housing).toLocaleString()} ETB</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">{t('የትራንስፖርት አበል', 'Transport Allowance')}</span>
-                      <span className="font-mono text-slate-200">{member.monthlyAllowances.transport.toLocaleString()} ETB</span>
+                      <span className="font-mono text-slate-200">{(liveCalc?.allowances.transport ?? member.monthlyAllowances.transport).toLocaleString()} ETB</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">{t('የስጋት (Hazard) አበል', 'Hazard Allowance')}</span>
-                      <span className="font-mono text-slate-200">{member.monthlyAllowances.hazard.toLocaleString()} ETB</span>
+                      <span className="font-mono text-slate-200">{(liveCalc?.allowances.hazard ?? member.monthlyAllowances.hazard).toLocaleString()} ETB</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t border-slate-800 font-bold text-emerald-400">
                       <span>{t('ጠቅላላ ገቢ (Gross Pay)', 'Total Gross')}</span>
@@ -614,7 +663,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   </div>
 
                   {/* Deductions */}
-                  <div className="space-y-2 text-xs">
+                  <div className="space-y-1.5 text-xs">
                     <div className="font-bold text-rose-400 uppercase text-[11px] pb-1 border-b border-slate-800">
                       {t('ተቀናሾች (Deductions)', 'Deductions')}
                     </div>
@@ -626,9 +675,73 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                       <span className="text-slate-400">{t('የስራ ግብር (Income Tax)', 'Income Tax')}</span>
                       <span className="font-mono text-rose-300">-{taxDeduction.toLocaleString()} ETB</span>
                     </div>
-                    <div className="flex justify-between pt-8 border-t border-slate-800 font-bold text-rose-400">
+
+                    {liveCalc && liveCalc.deductions.personalLoan > 0 && (
+                      <div className="flex justify-between bg-rose-500/10 p-1 rounded">
+                        <span className="text-rose-300 font-bold">{t('ከግል ብድር ቅነሳ', 'Personal Advance Loan')}</span>
+                        <span className="font-mono text-rose-300 font-bold">-{liveCalc.deductions.personalLoan.toLocaleString()} ETB</span>
+                      </div>
+                    )}
+
+                    {liveCalc && liveCalc.deductions.selamBiruhSavings > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-sky-300">{t('የሰላም ብሩህ ቁጠባ', 'Selam Biruh Savings')}</span>
+                        <span className="font-mono text-sky-300">-{liveCalc.deductions.selamBiruhSavings.toLocaleString()} ETB</span>
+                      </div>
+                    )}
+
+                    {liveCalc && liveCalc.deductions.selamBiruhLotteryShare > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-sky-300">{t('የሰላም ብሩህ ዕጣ ክፍያ', 'Selam Biruh Share')}</span>
+                        <span className="font-mono text-sky-300">-{liveCalc.deductions.selamBiruhLotteryShare.toLocaleString()} ETB</span>
+                      </div>
+                    )}
+
+                    {liveCalc && liveCalc.deductions.selamBiruhLoan > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-rose-300">{t('የሰላም ብሩህ ብድር', 'Selam Biruh Loan')}</span>
+                        <span className="font-mono text-rose-300">-{liveCalc.deductions.selamBiruhLoan.toLocaleString()} ETB</span>
+                      </div>
+                    )}
+
+                    {liveCalc && liveCalc.deductions.generalCreditLoan > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-300">{t('የብድርና ቁጠባ ብድር', 'SACCO Loan')}</span>
+                        <span className="font-mono text-rose-300">-{liveCalc.deductions.generalCreditLoan.toLocaleString()} ETB</span>
+                      </div>
+                    )}
+
+                    {liveCalc && liveCalc.deductions.hivFund > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-emerald-300">{t('የኤችአይቪ ፈንድ', 'HIV Fund')}</span>
+                        <span className="font-mono text-emerald-300">-{liveCalc.deductions.hivFund.toLocaleString()} ETB</span>
+                      </div>
+                    )}
+
+                    {liveCalc && (liveCalc.deductions.medical > 0 || liveCalc.deductions.healthInsurance > 0) && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">{t('የህክምና መዋጮ', 'Medical Fund')}</span>
+                        <span className="font-mono text-rose-300">-{(liveCalc.deductions.medical || liveCalc.deductions.healthInsurance).toLocaleString()} ETB</span>
+                      </div>
+                    )}
+
+                    {liveCalc && liveCalc.deductions.other > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">{t('ልዩ ልዩ/ሌሎች ቅነሳዎች', 'Other Deductions')}</span>
+                        <span className="font-mono text-rose-300">-{liveCalc.deductions.other.toLocaleString()} ETB</span>
+                      </div>
+                    )}
+
+                    {liveCalc && liveCalc.deductions.creditAssociation > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">{t('የፖሊስ ክሬዲት ማህበር', 'Credit Union')}</span>
+                        <span className="font-mono text-slate-300">-{liveCalc.deductions.creditAssociation.toLocaleString()} ETB</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between pt-2 border-t border-slate-800 font-bold text-rose-400">
                       <span>{t('ጠቅላላ ተቀናሽ', 'Total Deductions')}</span>
-                      <span className="font-mono">-{(pensionDeduction + taxDeduction).toLocaleString()} ETB</span>
+                      <span className="font-mono">-{(liveCalc?.deductions.totalDeductions ?? (pensionDeduction + taxDeduction)).toLocaleString()} ETB</span>
                     </div>
                   </div>
                 </div>
@@ -940,10 +1053,28 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
           {/* TAB 8: BENEFITS & ALLOWANCES */}
           {activeTab === 'benefits' && (
             <div className="space-y-4">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <Gift className="w-4 h-4 text-amber-400" />
-                {t('ጥቅማጥቅምና ልዩ አበሎች (Benefits & Entitlements)', 'Benefits & Allowances')}
-              </h4>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-amber-400" />
+                    {t('ጥቅማጥቅምና ልዩ አበሎች (Benefits & Entitlements)', 'Benefits & Allowances')}
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    {t('የመኖሪያ ቤት፣ የትራንስፖርት፣ የበረሃና የህክምና ጥቅማጥቅሞች ዝርዝር', 'Special monthly allowances and institutional benefit packages')}
+                  </p>
+                </div>
+
+                {currentRole === 'hr_admin' && (
+                  <button
+                    onClick={() => setActionModal('benefit')}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{t('አዲስ ጥቅማጥቅም መዝግብ', 'Assign Benefit')}</span>
+                  </button>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {member.benefits.length === 0 ? (
                   <div className="col-span-2 p-6 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl border border-slate-800">
@@ -977,10 +1108,22 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Disciplinary */}
               <div className="space-y-3">
-                <h4 className="text-sm font-bold text-rose-400 flex items-center gap-2">
-                  <AlertOctagon className="w-4 h-4" />
-                  {t('የዲሲፕሊን መዝገብ (Disciplinary Dossier)', 'Disciplinary Records')}
-                </h4>
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <h4 className="text-sm font-bold text-rose-400 flex items-center gap-2">
+                    <AlertOctagon className="w-4 h-4" />
+                    {t('የዲሲፕሊን መዝገብ (Disciplinary Dossier)', 'Disciplinary Records')}
+                  </h4>
+                  {currentRole === 'hr_admin' && (
+                    <button
+                      onClick={() => setActionModal('disciplinary')}
+                      className="px-2.5 py-1 rounded bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1 shadow"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>{t('እርምጃ መዝግብ', 'Log Action')}</span>
+                    </button>
+                  )}
+                </div>
+
                 {member.disciplinaryRecords.length === 0 ? (
                   <div className="p-4 text-center text-xs text-emerald-400 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                     <CheckCircle className="w-4 h-4 inline mr-1" />
@@ -1006,10 +1149,22 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
 
               {/* Awards */}
               <div className="space-y-3">
-                <h4 className="text-sm font-bold text-amber-400 flex items-center gap-2">
-                  <Award className="w-4 h-4" />
-                  {t('ሽልማቶችና የክብር ሜዳሊያዎች (Awards & Honors)', 'Honors & Citations')}
-                </h4>
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <h4 className="text-sm font-bold text-amber-400 flex items-center gap-2">
+                    <Award className="w-4 h-4" />
+                    {t('ሽልማቶችና የክብር ሜዳሊያዎች (Awards & Honors)', 'Honors & Citations')}
+                  </h4>
+                  {currentRole === 'hr_admin' && (
+                    <button
+                      onClick={() => setActionModal('award')}
+                      className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1 shadow"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>{t('ሽልማት መዝግብ', 'Grant Award')}</span>
+                    </button>
+                  )}
+                </div>
+
                 {member.awardsAndHonors.length === 0 ? (
                   <div className="p-4 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl border border-slate-800">
                     {t('ምንም የተመዘገበ ልዩ ሽልማት የለም', 'No special medals or citations logged.')}

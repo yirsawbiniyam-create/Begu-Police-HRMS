@@ -11,7 +11,8 @@ import {
 import {
   PayrollGlobalConfig,
   RankSalaryGradeScale,
-  MemberPayrollCustomization
+  MemberPayrollCustomization,
+  MemberProfile
 } from '../types/hrms';
 
 export interface SystemBrandingConfig {
@@ -438,4 +439,329 @@ export const saveMemberPayrollCustomizationToFirebase = async (
     return false;
   }
 };
+
+// ----------------- Member Profiles Registry & Firestore Collections ----------------- //
+const MEMBERS_COLLECTION = 'members';
+const LOCAL_MEMBERS_KEY = 'begu_hrms_members';
+
+/**
+ * Subscribe in real-time to all Member Profiles in Firestore
+ */
+export const subscribeToMembers = (
+  onUpdate: (members: MemberProfile[]) => void,
+  onError?: (err: any) => void
+) => {
+  if (!hrmsDb) {
+    const cached = localStorage.getItem(LOCAL_MEMBERS_KEY);
+    if (cached) {
+      try {
+        onUpdate(JSON.parse(cached));
+      } catch (e) {
+        console.error('Failed to parse cached members', e);
+      }
+    }
+    return () => {};
+  }
+
+  const colRef = collection(hrmsDb, MEMBERS_COLLECTION);
+  const unsubscribe = onSnapshot(
+    colRef,
+    snapshot => {
+      if (!snapshot.empty) {
+        const loaded: MemberProfile[] = [];
+        snapshot.forEach(docSnap => {
+          const item = docSnap.data() as MemberProfile;
+          if (item && item.policeId) {
+            loaded.push(item);
+          }
+        });
+        if (loaded.length > 0) {
+          localStorage.setItem(LOCAL_MEMBERS_KEY, JSON.stringify(loaded));
+          onUpdate(loaded);
+        }
+      }
+    },
+    err => {
+      console.warn('Firestore members subscription notice:', err);
+      if (onError) onError(err);
+      const cached = localStorage.getItem(LOCAL_MEMBERS_KEY);
+      if (cached) {
+        try {
+          onUpdate(JSON.parse(cached));
+        } catch {}
+      }
+    }
+  );
+
+  return unsubscribe;
+};
+
+/**
+ * Sanitize object for Firestore to guarantee no undefined fields are passed
+ */
+export const sanitizeForFirestore = <T>(data: T): T => {
+  if (data === undefined) return null as unknown as T;
+  return JSON.parse(JSON.stringify(data));
+};
+
+/**
+ * Save an individual Member Profile to Firestore (e.g. after adding training, evaluation, leave, benefits, disciplinary, awards, separation)
+ */
+export const saveMemberToFirebase = async (
+  member: MemberProfile
+): Promise<boolean> => {
+  // Update local storage first
+  try {
+    const cached = localStorage.getItem(LOCAL_MEMBERS_KEY);
+    if (cached) {
+      const list: MemberProfile[] = JSON.parse(cached);
+      const updatedList = list.map(m => m.policeId.toUpperCase() === member.policeId.toUpperCase() ? member : m);
+      localStorage.setItem(LOCAL_MEMBERS_KEY, JSON.stringify(updatedList));
+    }
+  } catch (e) {
+    console.error('Local cache error:', e);
+  }
+
+  if (!hrmsDb) {
+    return true;
+  }
+
+  try {
+    const sanitized = sanitizeForFirestore(member);
+    const docRef = doc(hrmsDb, MEMBERS_COLLECTION, member.policeId.toUpperCase());
+    await setDoc(docRef, {
+      ...sanitized,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error(`Failed to save member ${member.policeId} to Firestore:`, error);
+    return false;
+  }
+};
+
+/**
+ * Save all members to Firestore (e.g. initial seed or mass update)
+ */
+export const saveAllMembersToFirebase = async (
+  members: MemberProfile[]
+): Promise<boolean> => {
+  localStorage.setItem(LOCAL_MEMBERS_KEY, JSON.stringify(members));
+
+  if (!hrmsDb) {
+    return true;
+  }
+
+  try {
+    await Promise.all(
+      members.map(m => {
+        const sanitized = sanitizeForFirestore(m);
+        const docRef = doc(hrmsDb, MEMBERS_COLLECTION, m.policeId.toUpperCase());
+        return setDoc(docRef, {
+          ...sanitized,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      })
+    );
+    return true;
+  } catch (error) {
+    console.error('Failed to save members collection to Firestore:', error);
+    return false;
+  }
+};
+
+// ----------------- Individual HR Event Collections ----------------- //
+
+export const saveTrainingToFirestore = async (
+  policeId: string,
+  officerName: string,
+  training: any
+): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'trainings', training.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...training,
+      policeId: policeId.toUpperCase(),
+      officerName,
+      createdAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to write to trainings collection:', e);
+    return false;
+  }
+};
+
+export const saveEvaluationToFirestore = async (
+  policeId: string,
+  officerName: string,
+  evaluation: any
+): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'evaluations', evaluation.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...evaluation,
+      policeId: policeId.toUpperCase(),
+      officerName,
+      createdAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to write to evaluations collection:', e);
+    return false;
+  }
+};
+
+export const saveLeaveToFirestore = async (
+  policeId: string,
+  officerName: string,
+  leave: any
+): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'leaves', leave.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...leave,
+      policeId: policeId.toUpperCase(),
+      officerName,
+      createdAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to write to leaves collection:', e);
+    return false;
+  }
+};
+
+export const saveBenefitToFirestore = async (
+  policeId: string,
+  officerName: string,
+  benefit: any
+): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'benefits', benefit.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...benefit,
+      policeId: policeId.toUpperCase(),
+      officerName,
+      createdAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to write to benefits collection:', e);
+    return false;
+  }
+};
+
+export const saveDisciplinaryToFirestore = async (
+  policeId: string,
+  officerName: string,
+  record: any
+): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'disciplinary', record.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...record,
+      policeId: policeId.toUpperCase(),
+      officerName,
+      createdAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to write to disciplinary collection:', e);
+    return false;
+  }
+};
+
+export const saveAwardToFirestore = async (
+  policeId: string,
+  officerName: string,
+  award: any
+): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'awards', award.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...award,
+      policeId: policeId.toUpperCase(),
+      officerName,
+      createdAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to write to awards collection:', e);
+    return false;
+  }
+};
+
+export const saveSeparationToFirestore = async (
+  policeId: string,
+  officerName: string,
+  separation: any
+): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'separations', `sep-${policeId.toUpperCase()}`);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...separation,
+      policeId: policeId.toUpperCase(),
+      officerName,
+      createdAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to write to separations collection:', e);
+    return false;
+  }
+};
+
+export const saveApplicationToFirestore = async (app: any): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'applications', app.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...app,
+      updatedAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to save application to Firestore:', e);
+    return false;
+  }
+};
+
+export const saveAuditLogToFirestore = async (log: any): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'audit_logs', log.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...log,
+      createdAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to save audit log to Firestore:', e);
+    return false;
+  }
+};
+
+export const saveNotificationToFirestore = async (notif: any): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'notifications', notif.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...notif,
+      createdAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to save notification to Firestore:', e);
+    return false;
+  }
+};
+
 
