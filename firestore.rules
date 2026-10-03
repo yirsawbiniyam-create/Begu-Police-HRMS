@@ -110,5 +110,14 @@ service cloud.firestore {
     match /separations/{id} {
       allow read, write: if true;
     }
+    match /external_ids/{id} {
+      allow read, write: if true;
+    }
+    match /test/{id} {
+      allow read, write: if true;
+    }
+    match /monthly_payrolls/{id} {
+      allow read, write: if true;
+    }
   }
 }

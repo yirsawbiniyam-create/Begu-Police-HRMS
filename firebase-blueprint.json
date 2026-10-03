@@ -74,6 +74,20 @@
         "updatedAt": { "type": "string" },
         "updatedBy": { "type": "string" }
       }
+    },
+    "external_ids": {
+      "collection": "external_ids",
+      "fields": {
+        "id_number": { "type": "string" },
+        "full_name_am": { "type": "string" },
+        "full_name_en": { "type": "string" },
+        "rank_am": { "type": "string" },
+        "rank_en": { "type": "string" },
+        "phone": { "type": "string" },
+        "photo_url": { "type": "string" },
+        "badge_number": { "type": "string" },
+        "created_at": { "type": "string" }
+      }
     }
   },
   "firestore": {

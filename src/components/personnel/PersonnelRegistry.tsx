@@ -14,7 +14,15 @@ import {
   ChevronDown,
   Layers,
   FileSpreadsheet,
-  Printer
+  Printer,
+  Plus,
+  GraduationCap,
+  TrendingUp,
+  Calendar,
+  Gift,
+  AlertOctagon,
+  Award,
+  FolderOpen
 } from 'lucide-react';
 
 interface PersonnelRegistryProps {
@@ -31,6 +39,10 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
   const [selectedGender, setSelectedGender] = useState<string>('all');
 
   const [selectedMemberForModal, setSelectedMemberForModal] = useState<MemberProfile | null>(null);
+  const [initialTabForModal, setInitialTabForModal] = useState<string>('overview');
+  const [showQuickRecordLauncher, setShowQuickRecordLauncher] = useState<boolean>(false);
+  const [selectedPoliceIdForLauncher, setSelectedPoliceIdForLauncher] = useState<string>('');
+  const [selectedTabForLauncher, setSelectedTabForLauncher] = useState<string>('training');
 
   // Filter logic
   const filteredMembers = useMemo(() => {
@@ -123,6 +135,19 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {currentRole !== 'member' && (
+            <button
+              onClick={() => {
+                setSelectedPoliceIdForLauncher(filteredMembers[0]?.policeId || members[0]?.policeId || '');
+                setShowQuickRecordLauncher(true);
+              }}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center gap-2 transition-all shadow-md"
+            >
+              <Plus className="w-4 h-4 text-slate-950" />
+              <span>{t('አዲስ HR መዝገብ አስገባ', 'Quick Log HR Entry')}</span>
+            </button>
+          )}
+
           <button
             onClick={handleExportCsv}
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-2 transition-colors shadow"
@@ -131,10 +156,10 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
             <span>{t('Excel / CSV አውርድ', 'Export Roster')}</span>
           </button>
 
-          {currentRole === 'hr_admin' && (
+          {currentRole !== 'member' && (
             <button
               onClick={onOpenIdGateway}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-2 transition-colors shadow"
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center gap-2 transition-colors shadow"
             >
               <Users className="w-4 h-4" />
               <span>{t('ከመታወቂያ ሲስተም አዲስ አባል አዋህድ', 'Onboard via ID System')}</span>
@@ -324,13 +349,68 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => setSelectedMemberForModal(m)}
-                        className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors ml-auto shadow-sm"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>{t('ዲጂታል ማህደር', 'Personnel File')}</span>
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => {
+                            setInitialTabForModal('training');
+                            setSelectedMemberForModal(m);
+                          }}
+                          title={t('ስልጠናዎች', 'Trainings')}
+                          className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500 text-blue-300 hover:text-white transition-colors border border-blue-500/20"
+                        >
+                          <GraduationCap className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setInitialTabForModal('performance');
+                            setSelectedMemberForModal(m);
+                          }}
+                          title={t('አፈጻጸም', 'Performance')}
+                          className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 transition-colors border border-emerald-500/20"
+                        >
+                          <TrendingUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setInitialTabForModal('leave');
+                            setSelectedMemberForModal(m);
+                          }}
+                          title={t('ፈቃድ', 'Leave')}
+                          className="p-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500 text-sky-300 hover:text-white transition-colors border border-sky-500/20"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setInitialTabForModal('benefits');
+                            setSelectedMemberForModal(m);
+                          }}
+                          title={t('ጥቅማጥቅም', 'Benefits')}
+                          className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500 text-amber-300 hover:text-slate-950 transition-colors border border-amber-500/20"
+                        >
+                          <Gift className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setInitialTabForModal('disciplinary');
+                            setSelectedMemberForModal(m);
+                          }}
+                          title={t('ዲሲፕሊንና ሽልማት', 'Discipline & Awards')}
+                          className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-300 hover:text-white transition-colors border border-rose-500/20"
+                        >
+                          <AlertOctagon className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setInitialTabForModal('overview');
+                            setSelectedMemberForModal(m);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm ml-1"
+                        >
+                          <FolderOpen className="w-3.5 h-3.5" />
+                          <span>{t('ዶሴ ክፈት', 'Dossier')}</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -340,10 +420,109 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
         </div>
       </div>
 
+      {/* Quick HR Record Launcher Modal */}
+      {showQuickRecordLauncher && (
+        <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h4 className="text-base font-bold text-amber-400 flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  {t('አዲስ HR መዝገብ አስገባ (ስልጠና፣ አፈፃፀም፣ ፈቃድ፣ ጥቅማጥቅም፣ ዲሲፕሊን)', 'Quick Log Personnel Record')}
+                </h4>
+                <p className="text-xs text-slate-400">
+                  {t('የፖሊስ አባሉንና የሚመዘገበውን ዘርፍ ይምረጡ', 'Select police officer and record category')}
+                </p>
+              </div>
+              <button onClick={() => setShowQuickRecordLauncher(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  {t('የፖሊስ አባል ይምረጡ *', 'Select Police Officer *')}
+                </label>
+                <select
+                  value={selectedPoliceIdForLauncher}
+                  onChange={e => setSelectedPoliceIdForLauncher(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white"
+                >
+                  {members.map(m => (
+                    <option key={m.policeId} value={m.policeId}>
+                      {m.policeId} - {m.identity.fullName} ({m.currentRank} - {m.currentDepartment})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">
+                  {t('የሚመዘገበው ዘርፍ / ፎልደር *', 'Select Category / Dossier Folder *')}
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'training', label: 'ስልጠናዎች', icon: GraduationCap, color: 'text-blue-400' },
+                    { id: 'performance', label: 'አፈፃፀም ምዘና', icon: TrendingUp, color: 'text-emerald-400' },
+                    { id: 'leave', label: 'ፈቃድ መዝገብ', icon: Calendar, color: 'text-sky-400' },
+                    { id: 'benefits', label: 'ጥቅማ ጥቅም', icon: Gift, color: 'text-amber-400' },
+                    { id: 'disciplinary', label: 'ዲሲፕሊን & ሽልማት', icon: AlertOctagon, color: 'text-rose-400' },
+                    { id: 'separation', label: 'ስንብት & ጡረታ', icon: LogOut, color: 'text-purple-400' }
+                  ].map(cat => {
+                    const Icon = cat.icon;
+                    const isSelected = selectedTabForLauncher === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSelectedTabForLauncher(cat.id)}
+                        className={`p-3 rounded-xl border text-left flex flex-col items-start gap-1 transition-all ${
+                          isSelected
+                            ? 'bg-amber-500/20 border-amber-500 text-white shadow-sm ring-1 ring-amber-500'
+                            : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 ${cat.color}`} />
+                        <span className="text-xs font-bold mt-1">{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowQuickRecordLauncher(false)}
+                className="px-3 py-1.5 text-xs text-slate-400"
+              >
+                {t('ሰርዝ', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = members.find(m => m.policeId.toUpperCase() === selectedPoliceIdForLauncher.toUpperCase()) || members[0];
+                  if (target) {
+                    setInitialTabForModal(selectedTabForLauncher);
+                    setSelectedMemberForModal(target);
+                    setShowQuickRecordLauncher(false);
+                  }
+                }}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
+              >
+                <FolderOpen className="w-4 h-4" />
+                <span>{t('ማህደር ክፈትና አዲስ መዝግብ', 'Open Dossier & Add Entry')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Personnel Dossier Modal */}
       {selectedMemberForModal && (
         <MemberPersonnelFileModal
           member={selectedMemberForModal}
+          initialTab={initialTabForModal}
           onClose={() => setSelectedMemberForModal(null)}
         />
       )}

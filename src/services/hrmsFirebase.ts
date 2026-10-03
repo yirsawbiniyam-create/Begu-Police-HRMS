@@ -1,19 +1,29 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore,
+  setLogLevel,
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   onSnapshot,
   collection,
   getDocs
 } from 'firebase/firestore';
+import firebaseAppletConfig from '../../firebase-applet-config.json';
 import {
   PayrollGlobalConfig,
   RankSalaryGradeScale,
   MemberPayrollCustomization,
   MemberProfile
 } from '../types/hrms';
+
+// Suppress non-critical offline network logs from Firestore client
+try {
+  setLogLevel('error');
+} catch {
+  // Ignore
+}
 
 export interface SystemBrandingConfig {
   logoUrl: string;
@@ -24,15 +34,15 @@ export interface SystemBrandingConfig {
   updatedBy: string;
 }
 
-// User-provided Firebase configuration for Begu Police HRMS
+// Provisioned Firebase configuration for Benishangul Gumuz Police HRMS
 export const hrmsFirebaseConfig = {
-  apiKey: "AIzaSyCrMbP_NL8aseUYkqXjQUa4frflCquhCig",
-  authDomain: "begu-police-hrms.firebaseapp.com",
-  projectId: "begu-police-hrms",
-  storageBucket: "begu-police-hrms.firebasestorage.app",
-  messagingSenderId: "897086099817",
-  appId: "1:897086099817:web:05f7ef3e84bc6242af2df8",
-  measurementId: "G-RF7Y00Z3P2"
+  apiKey: firebaseAppletConfig.apiKey,
+  authDomain: firebaseAppletConfig.authDomain,
+  projectId: firebaseAppletConfig.projectId,
+  storageBucket: firebaseAppletConfig.storageBucket,
+  messagingSenderId: firebaseAppletConfig.messagingSenderId,
+  appId: firebaseAppletConfig.appId,
+  measurementId: firebaseAppletConfig.measurementId || undefined
 };
 
 // Initialize Firebase App for Begu Police HRMS
@@ -47,9 +57,21 @@ try {
   } else {
     hrmsApp = initializeApp(hrmsFirebaseConfig);
   }
-  hrmsDb = getFirestore(hrmsApp);
+
+  if (firebaseAppletConfig.firestoreDatabaseId && firebaseAppletConfig.firestoreDatabaseId !== '(default)') {
+    hrmsDb = getFirestore(hrmsApp, firebaseAppletConfig.firestoreDatabaseId);
+  } else {
+    hrmsDb = getFirestore(hrmsApp);
+  }
+
+  // Validate connection to Firestore as recommended by skill
+  if (hrmsDb) {
+    getDocFromServer(doc(hrmsDb, 'test', 'connection')).catch(() => {
+      // Offline fallback is expected and handled gracefully
+    });
+  }
 } catch (error) {
-  console.warn('Firebase initialization error for HRMS:', error);
+  console.warn('Firebase initialization notice for HRMS:', error);
 }
 
 export { hrmsApp, hrmsDb };
@@ -449,6 +471,7 @@ const LOCAL_MEMBERS_KEY = 'begu_hrms_members';
  */
 export const subscribeToMembers = (
   onUpdate: (members: MemberProfile[]) => void,
+  onEmpty?: () => void,
   onError?: (err: any) => void
 ) => {
   if (!hrmsDb) {
@@ -479,6 +502,8 @@ export const subscribeToMembers = (
           localStorage.setItem(LOCAL_MEMBERS_KEY, JSON.stringify(loaded));
           onUpdate(loaded);
         }
+      } else if (onEmpty) {
+        onEmpty();
       }
     },
     err => {
@@ -763,5 +788,197 @@ export const saveNotificationToFirestore = async (notif: any): Promise<boolean> 
     return false;
   }
 };
+
+export const saveUserAccountToFirestore = async (account: any): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'user_accounts', account.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...account,
+      updatedAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to save user account to Firestore:', e);
+    return false;
+  }
+};
+
+export const deleteUserAccountFromFirestore = async (userId: string): Promise<boolean> => {
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'user_accounts', userId);
+    await setDoc(docRef, { deleted: true, updatedAt: new Date().toISOString() }, { merge: true });
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+export const subscribeToApplications = (
+  onUpdate: (apps: any[]) => void,
+  onEmpty?: () => void
+) => {
+  if (!hrmsDb) return () => {};
+  try {
+    const colRef = collection(hrmsDb, 'applications');
+    return onSnapshot(colRef, snapshot => {
+      if (!snapshot.empty) {
+        const loaded: any[] = [];
+        snapshot.forEach(docSnap => {
+          loaded.push(docSnap.data());
+        });
+        onUpdate(loaded);
+      } else if (onEmpty) {
+        onEmpty();
+      }
+    }, err => {
+      // Offline fallback
+    });
+  } catch {
+    return () => {};
+  }
+};
+
+export const subscribeToAuditLogs = (
+  onUpdate: (logs: any[]) => void,
+  onEmpty?: () => void
+) => {
+  if (!hrmsDb) return () => {};
+  try {
+    const colRef = collection(hrmsDb, 'audit_logs');
+    return onSnapshot(colRef, snapshot => {
+      if (!snapshot.empty) {
+        const loaded: any[] = [];
+        snapshot.forEach(docSnap => {
+          loaded.push(docSnap.data());
+        });
+        loaded.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+        onUpdate(loaded);
+      } else if (onEmpty) {
+        onEmpty();
+      }
+    }, err => {
+      // Offline fallback
+    });
+  } catch {
+    return () => {};
+  }
+};
+
+export const subscribeToNotifications = (
+  onUpdate: (notifs: any[]) => void,
+  onEmpty?: () => void
+) => {
+  if (!hrmsDb) return () => {};
+  try {
+    const colRef = collection(hrmsDb, 'notifications');
+    return onSnapshot(colRef, snapshot => {
+      if (!snapshot.empty) {
+        const loaded: any[] = [];
+        snapshot.forEach(docSnap => {
+          loaded.push(docSnap.data());
+        });
+        loaded.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        onUpdate(loaded);
+      } else if (onEmpty) {
+        onEmpty();
+      }
+    }, err => {
+      // Offline fallback
+    });
+  } catch {
+    return () => {};
+  }
+};
+
+export const subscribeToUserAccounts = (
+  onUpdate: (accounts: any[]) => void,
+  onEmpty?: () => void
+) => {
+  if (!hrmsDb) return () => {};
+  try {
+    const colRef = collection(hrmsDb, 'user_accounts');
+    return onSnapshot(colRef, snapshot => {
+      if (!snapshot.empty) {
+        const loaded: any[] = [];
+        snapshot.forEach(docSnap => {
+          const item = docSnap.data();
+          if (!item.deleted) {
+            loaded.push(item);
+          }
+        });
+        onUpdate(loaded);
+      } else if (onEmpty) {
+        onEmpty();
+      }
+    }, err => {
+      // Offline fallback
+    });
+  } catch {
+    return () => {};
+  }
+};
+
+export const saveMonthlyPayrollArchiveToFirestore = async (archive: any): Promise<boolean> => {
+  try {
+    const cached = localStorage.getItem('begu_hrms_payroll_archives');
+    const list: any[] = cached ? JSON.parse(cached) : [];
+    const updated = [archive, ...list.filter(item => item.id !== archive.id)];
+    localStorage.setItem('begu_hrms_payroll_archives', JSON.stringify(updated));
+  } catch {}
+
+  if (!hrmsDb) return true;
+  try {
+    const docRef = doc(hrmsDb, 'monthly_payrolls', archive.id);
+    await setDoc(docRef, sanitizeForFirestore({
+      ...archive,
+      savedAt: new Date().toISOString()
+    }), { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('Failed to save monthly payroll archive to Firestore:', e);
+    return false;
+  }
+};
+
+export const subscribeToMonthlyPayrollArchives = (
+  onUpdate: (archives: any[]) => void,
+  onEmpty?: () => void
+) => {
+  const cached = localStorage.getItem('begu_hrms_payroll_archives');
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        onUpdate(parsed);
+      }
+    } catch {}
+  }
+
+  if (!hrmsDb) return () => {};
+  try {
+    const colRef = collection(hrmsDb, 'monthly_payrolls');
+    return onSnapshot(colRef, snapshot => {
+      if (!snapshot.empty) {
+        const loaded: any[] = [];
+        snapshot.forEach(docSnap => {
+          loaded.push(docSnap.data());
+        });
+        loaded.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        localStorage.setItem('begu_hrms_payroll_archives', JSON.stringify(loaded));
+        onUpdate(loaded);
+      } else if (onEmpty) {
+        onEmpty();
+      }
+    }, err => {
+      // Offline fallback
+    });
+  } catch {
+    return () => {};
+  }
+};
+
+
 
 

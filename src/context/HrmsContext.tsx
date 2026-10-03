@@ -25,7 +25,8 @@ import {
   CalculatedOfficerPayroll,
   BenefitItem,
   DisciplinaryRecord,
-  AwardItem
+  AwardItem,
+  MonthlyPayrollArchive
 } from '../types/hrms';
 import {
   INITIAL_MEMBERS,
@@ -69,7 +70,15 @@ import {
   saveSeparationToFirestore,
   saveApplicationToFirestore,
   saveAuditLogToFirestore,
-  saveNotificationToFirestore
+  saveNotificationToFirestore,
+  saveUserAccountToFirestore,
+  deleteUserAccountFromFirestore,
+  subscribeToApplications,
+  subscribeToAuditLogs,
+  subscribeToNotifications,
+  subscribeToUserAccounts,
+  saveMonthlyPayrollArchiveToFirestore,
+  subscribeToMonthlyPayrollArchives
 } from '../services/hrmsFirebase';
 
 interface HrmsContextType {
@@ -99,8 +108,34 @@ interface HrmsContextType {
   applyRankSalaryScaleToAllMembers: (rank: PoliceRank, grade: number, stepIndex: number, newSalary: number) => Promise<{ success: boolean; count: number; message: string }>;
   getCalculatedPayroll: (policeId: string) => CalculatedOfficerPayroll | null;
   allCalculatedPayrolls: CalculatedOfficerPayroll[];
+  commissionOnlyPayrollMembers: MemberProfile[];
+  isCommissionOfficer: (member: MemberProfile) => boolean;
   sendPayslipReadyNotification: (policeId: string, monthName?: string) => Promise<{ success: boolean; message: string }>;
   notifyAllMembersPayrollReady: (monthName?: string) => Promise<{ success: boolean; count: number; message: string }>;
+
+  // Monthly Payroll Archive by Month & File
+  monthlyPayrollArchives: MonthlyPayrollArchive[];
+  saveCurrentMonthlyPayrollArchive: (monthName: string, notes?: string) => Promise<{ success: boolean; message: string }>;
+
+  // Quick Monthly Adjustments by Police ID
+  quickAdjustSalaryByPoliceId: (
+    policeId: string,
+    field: 'baseSalary' | 'duty' | 'hazard' | 'field' | 'housing' | 'transport' | 'ration' | 'grade_step',
+    newValue: number,
+    secondValue?: number,
+    reason?: string
+  ) => Promise<{ success: boolean; message: string }>;
+  quickAdjustDeductionsByPoliceId: (
+    policeId: string,
+    deductions: Partial<MemberPayrollCustomization>
+  ) => Promise<{ success: boolean; message: string }>;
+
+  // Duty Station Address Management & Step/Promotion Eligibility
+  updateMemberDutyStation: (policeId: string, dutyStationAddress: string, isCommissionStaff: boolean) => Promise<{ success: boolean; message: string }>;
+  updateMemberStepAndPromotionDates: (policeId: string, stepDate?: string, promoDate?: string) => Promise<{ success: boolean; message: string }>;
+  applyStepIncrement: (policeId: string) => Promise<{ success: boolean; message: string }>;
+  eligibleStepIncrementMembers: MemberProfile[];
+  eligibleRankPromotionMembers: MemberProfile[];
 
   currentRole: Role;
   setCurrentRole: (role: Role) => void;
@@ -174,7 +209,7 @@ interface HrmsContextType {
     pensionEligible: boolean;
     pensionBookRef?: string;
     decisionDocUrl?: string;
-  }) => void;
+  }) => Promise<{ success: boolean; message: string }>;
   updateSalaryGradeStep: (policeId: string, grade: number, step: number, reason: string) => void;
 
   // Applications
@@ -399,21 +434,73 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Real-time Firestore subscription for Member Profiles (Registry)
+  // Real-time Firestore subscriptions for Members, Applications, Audit Logs, Notifications, and User Accounts
   useEffect(() => {
-    const unsubscribe = subscribeToMembers(
+    const unsubMembers = subscribeToMembers(
       (remoteMembers: MemberProfile[]) => {
         if (remoteMembers && remoteMembers.length > 0) {
           setMembers(remoteMembers);
         }
       },
+      () => {
+        // Initial seed if Firestore is brand new
+        saveAllMembersToFirebase(INITIAL_MEMBERS);
+      },
       err => {
-        console.warn('Members Firestore subscription warning:', err);
+        console.warn('Members Firestore subscription notice:', err);
+      }
+    );
+
+    const unsubApps = subscribeToApplications(
+      (remoteApps) => {
+        if (remoteApps && remoteApps.length > 0) {
+          setApplications(remoteApps as OnlineApplication[]);
+        }
+      },
+      () => {
+        INITIAL_APPLICATIONS.forEach(app => saveApplicationToFirestore(app));
+      }
+    );
+
+    const unsubAudit = subscribeToAuditLogs(
+      (remoteLogs) => {
+        if (remoteLogs && remoteLogs.length > 0) {
+          setAuditLogs(remoteLogs as AuditLogItem[]);
+        }
+      },
+      () => {
+        INITIAL_AUDIT_LOGS.forEach(log => saveAuditLogToFirestore(log));
+      }
+    );
+
+    const unsubNotifs = subscribeToNotifications(
+      (remoteNotifs) => {
+        if (remoteNotifs && remoteNotifs.length > 0) {
+          setNotifications(remoteNotifs as NotificationItem[]);
+        }
+      },
+      () => {
+        INITIAL_NOTIFICATIONS.forEach(notif => saveNotificationToFirestore(notif));
+      }
+    );
+
+    const unsubUsers = subscribeToUserAccounts(
+      (remoteUsers) => {
+        if (remoteUsers && remoteUsers.length > 0) {
+          setUserAccounts(remoteUsers as SystemUserAccount[]);
+        }
+      },
+      () => {
+        INITIAL_SYSTEM_USERS.forEach(u => saveUserAccountToFirestore(u));
       }
     );
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (unsubMembers) unsubMembers();
+      if (unsubApps) unsubApps();
+      if (unsubAudit) unsubAudit();
+      if (unsubNotifs) unsubNotifs();
+      if (unsubUsers) unsubUsers();
     };
   }, []);
 
@@ -479,7 +566,19 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {};
   });
 
-  // Real-time Firestore subscriptions for Payroll Config, Salary Scales & Member Payrolls
+  const [monthlyPayrollArchives, setMonthlyPayrollArchives] = useState<MonthlyPayrollArchive[]>(() => {
+    const saved = localStorage.getItem('begu_hrms_payroll_archives');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error parsing payroll archives', e);
+      }
+    }
+    return [];
+  });
+
+  // Real-time Firestore subscriptions for Payroll Config, Salary Scales, Member Payrolls & Monthly Archives
   useEffect(() => {
     const unsubConfig = subscribeToPayrollConfig(config => {
       if (config) setPayrollConfig(config);
@@ -490,11 +589,15 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubCustom = subscribeToMemberPayrollCustomizations(map => {
       if (map) setMemberPayrollCustomizations(map);
     });
+    const unsubArchives = subscribeToMonthlyPayrollArchives(archives => {
+      if (archives && archives.length > 0) setMonthlyPayrollArchives(archives);
+    });
 
     return () => {
       if (unsubConfig) unsubConfig();
       if (unsubScales) unsubScales();
       if (unsubCustom) unsubCustom();
+      if (unsubArchives) unsubArchives();
     };
   }, []);
 
@@ -727,6 +830,316 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     .filter(m => m.status === 'active' || m.status === 'on_leave' || m.status === 'transferred_pending')
     .map(m => calculateOfficerPayroll(m, payrollConfig, memberPayrollCustomizations[m.policeId.toUpperCase()]));
 
+  // Institutional Commission Scope: Verify if an officer belongs to Police Commission HQ
+  const isCommissionOfficer = (m: MemberProfile): boolean => {
+    if (m.isCommissionStaff === true) return true;
+    if (m.isCommissionStaff === false) return false;
+    const addr = `${m.dutyStationAddress || ''} ${m.currentStation || ''} ${m.currentDepartment || ''}`.toLowerCase();
+    return addr.includes('ኮሚሽን') || addr.includes('commission') || addr.includes('ዋና መምሪያ') || addr.includes('hq');
+  };
+
+  // Commission Only Roster for the Commission's Payroll Specialist
+  const commissionOnlyPayrollMembers = members.filter(
+    m => (m.status === 'active' || m.status === 'on_leave' || m.status === 'transferred_pending') && isCommissionOfficer(m)
+  );
+
+  // Eligible members for step increment (due now or within next 60 days)
+  const eligibleStepIncrementMembers = members.filter(m => {
+    if (m.status !== 'active') return false;
+    if (!m.nextStepIncrementDate) return false;
+    const targetDate = new Date(m.nextStepIncrementDate);
+    const now = new Date();
+    const diffDays = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays <= 60;
+  });
+
+  // Eligible members for rank promotion (due now or within next 60 days)
+  const eligibleRankPromotionMembers = members.filter(m => {
+    if (m.status !== 'active') return false;
+    if (!m.nextPromotionEligibilityDate) return false;
+    const targetDate = new Date(m.nextPromotionEligibilityDate);
+    const now = new Date();
+    const diffDays = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays <= 60;
+  });
+
+  // Save / Archive Monthly Processed Payroll to Cloud Firestore & File
+  const saveCurrentMonthlyPayrollArchive = async (monthName: string, notes?: string) => {
+    // We snapshot both the Commission officers and the active force
+    const eligibleMembers = members.filter(
+      m => m.status === 'active' || m.status === 'on_leave' || m.status === 'transferred_pending'
+    );
+    const records = eligibleMembers.map(m =>
+      calculateOfficerPayroll(m, payrollConfig, memberPayrollCustomizations[m.policeId.toUpperCase()])
+    );
+
+    const now = new Date();
+    const archiveId = `payroll-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const archive: MonthlyPayrollArchive = {
+      id: archiveId,
+      monthName,
+      year: now.getFullYear(),
+      monthIndex: now.getMonth() + 1,
+      createdAt: now.toISOString().replace('T', ' ').substring(0, 16),
+      processedBy: currentUser?.fullName || 'Payroll Specialist',
+      totalOfficers: records.length,
+      totalBaseSalary: records.reduce((s, r) => s + r.baseSalary, 0),
+      totalRationAllowance: records.reduce((s, r) => s + (r.allowances.ration || 0), 0),
+      totalAllowances: records.reduce((s, r) => s + r.allowances.totalAllowances, 0),
+      totalGrossSalary: records.reduce((s, r) => s + r.grossSalary, 0),
+      totalPensionEmployee: records.reduce((s, r) => s + r.deductions.pensionEmployee, 0),
+      totalPensionEmployer: records.reduce((s, r) => s + r.deductions.pensionEmployer, 0),
+      totalIncomeTax: records.reduce((s, r) => s + r.deductions.incomeTax, 0),
+      totalDeductions: records.reduce((s, r) => s + r.deductions.totalDeductions, 0),
+      totalNetPay: records.reduce((s, r) => s + r.netPay, 0),
+      records,
+      status: 'finalized',
+      notes: notes || 'በፋየርስቶር በፋይል የተመዘገበ ይፋዊ የወር ደመወዝ መዝገብ'
+    };
+
+    setMonthlyPayrollArchives(prev => [archive, ...prev.filter(a => a.id !== archiveId)]);
+    await saveMonthlyPayrollArchiveToFirestore(archive);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'Payroll Specialist',
+      role: currentRole,
+      action: `የ${monthName} ወርሃዊ ደመወዝ ተሰርቶ በማህደር በፋየርስቶር ተመዘገበ (${records.length} አባላት)`,
+      targetPoliceId: 'PAYROLL-ARCHIVE',
+      targetMemberName: `${monthName} የደመወዝ መዝገብ`,
+      category: 'salary',
+      newValue: `Net Payout: ${archive.totalNetPay.toLocaleString()} ETB`
+    });
+
+    return {
+      success: true,
+      message: `የ${monthName} ወርሃዊ ደመወዝ በማህደር በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!`
+    };
+  };
+
+  // Quick Monthly Adjustments by Police ID (Officer doesn't have to scroll or browse)
+  const quickAdjustSalaryByPoliceId = async (
+    policeId: string,
+    field: 'baseSalary' | 'duty' | 'hazard' | 'field' | 'housing' | 'transport' | 'ration' | 'grade_step',
+    newValue: number,
+    secondValue?: number,
+    reason?: string
+  ) => {
+    const member = getMemberByPoliceId(policeId);
+    if (!member) return { success: false, message: 'ይህ የPolice ID ያለው አባል አልተገኘም' };
+
+    const pid = policeId.toUpperCase();
+    const currentCustom = memberPayrollCustomizations[pid] || { policeId: pid };
+
+    let updatedCustom: MemberPayrollCustomization = { ...currentCustom };
+    let updatedMember: MemberProfile = { ...member };
+
+    if (field === 'baseSalary') {
+      updatedCustom.customBaseSalary = newValue;
+      updatedMember.baseSalary = newValue;
+    } else if (field === 'grade_step') {
+      updatedCustom.salaryGrade = newValue;
+      updatedCustom.salaryStep = secondValue || 1;
+      const newBase = SALARY_SCALE_MATRIX[newValue]?.[(secondValue || 1) - 1] || member.baseSalary;
+      updatedCustom.customBaseSalary = newBase;
+      updatedMember.salaryGrade = newValue;
+      updatedMember.salaryStep = secondValue || 1;
+      updatedMember.baseSalary = newBase;
+    } else {
+      updatedCustom.monthlyAllowances = {
+        ...(member.monthlyAllowances || {}),
+        ...(updatedCustom.monthlyAllowances || {}),
+        [field]: newValue
+      };
+      updatedMember.monthlyAllowances = {
+        ...updatedMember.monthlyAllowances,
+        [field]: newValue
+      };
+    }
+
+    setMemberPayrollCustomizations(prev => ({ ...prev, [pid]: updatedCustom }));
+    setMembers(prev => prev.map(m => m.policeId.toUpperCase() === pid ? updatedMember : m));
+
+    await saveMemberPayrollCustomizationToFirebase(updatedCustom);
+    await saveMemberToFirebase(updatedMember);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'Payroll Specialist',
+      role: currentRole,
+      action: `የአባል ደመወዝ/አበል ፈጣን ማስተካከያ: ${pid} (${field} = ${newValue})`,
+      targetPoliceId: pid,
+      targetMemberName: member.identity.fullName,
+      category: 'salary',
+      newValue: `${field}: ${newValue} ETB (${reason || 'ወርሃዊ ማስተካከያ'})`
+    });
+
+    return {
+      success: true,
+      message: `የአባል ${member.identity.fullName} (${pid}) ${field} በተሳካ ሁኔታ ተስተካክሎ በፋየርስቶር ተቀምጧል!`
+    };
+  };
+
+  // Quick Deductions Entry Tool by Police ID
+  const quickAdjustDeductionsByPoliceId = async (
+    policeId: string,
+    deductions: Partial<MemberPayrollCustomization>
+  ) => {
+    const member = getMemberByPoliceId(policeId);
+    if (!member) return { success: false, message: 'ይህ የPolice ID ያለው አባል አልተገኘም' };
+
+    const pid = policeId.toUpperCase();
+    const currentCustom = memberPayrollCustomizations[pid] || { policeId: pid };
+
+    const updatedCustom: MemberPayrollCustomization = {
+      ...currentCustom,
+      ...deductions,
+      policeId: pid,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.fullName || 'Payroll Specialist'
+    };
+
+    setMemberPayrollCustomizations(prev => ({ ...prev, [pid]: updatedCustom }));
+    await saveMemberPayrollCustomizationToFirebase(updatedCustom);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'Payroll Specialist',
+      role: currentRole,
+      action: `የተቋማዊና ልዩ ቅነሳዎች ማስተካከያ በPolice ID ተመዘገበ: ${pid}`,
+      targetPoliceId: pid,
+      targetMemberName: member.identity.fullName,
+      category: 'salary',
+      newValue: 'Deductions recalculated in live payroll'
+    });
+
+    return {
+      success: true,
+      message: `የአባል ${member.identity.fullName} (${pid}) ቅነሳዎች ተስተካክለው በፔሮል ላይ በቀጥታ ተተግብረዋል!`
+    };
+  };
+
+  // Duty Station Address Management (Admin manually sets duty station to determine Commission staff)
+  const updateMemberDutyStation = async (
+    policeId: string,
+    dutyStationAddress: string,
+    isCommissionStaff: boolean
+  ) => {
+    const member = getMemberByPoliceId(policeId);
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
+
+    const updated: MemberProfile = {
+      ...member,
+      dutyStationAddress,
+      isCommissionStaff,
+      currentStation: (isCommissionStaff || dutyStationAddress.includes('ኮሚሽን'))
+        ? 'አሶሳ ዋና መምሪያ (Assosa HQ)'
+        : member.currentStation
+    };
+
+    setMembers(prev => prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updated : m));
+    await saveMemberToFirebase(updated);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'HR Admin',
+      role: currentRole,
+      action: `የአባል ይፋዊ የስራ አድራሻ ተስተካከለ: ${dutyStationAddress} (${isCommissionStaff ? 'የኮሚሽኑ ሰራተኛ' : 'የዞን/ወረዳ ሰራተኛ'})`,
+      targetPoliceId: policeId,
+      targetMemberName: member.identity.fullName,
+      category: 'transfer',
+      newValue: dutyStationAddress
+    });
+
+    return {
+      success: true,
+      message: `የአባሉ የስራ አድራሻ ተስተካክሏል! ${isCommissionStaff ? 'አሁን በፔሮል ኦፊሰሩ ሉህ ላይ ይታያል።' : 'ከኮሚሽኑ ፔሮል ውጪ ሆኗል።'}`
+    };
+  };
+
+  // Step Increment & Rank Promotion Eligibility Dates Update
+  const updateMemberStepAndPromotionDates = async (
+    policeId: string,
+    stepDate?: string,
+    promoDate?: string
+  ) => {
+    const member = getMemberByPoliceId(policeId);
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
+
+    const updated: MemberProfile = {
+      ...member,
+      nextStepIncrementDate: stepDate || member.nextStepIncrementDate,
+      nextPromotionEligibilityDate: promoDate || member.nextPromotionEligibilityDate
+    };
+
+    setMembers(prev => prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updated : m));
+    await saveMemberToFirebase(updated);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'HR Admin',
+      role: currentRole,
+      action: `የአባል የእርከንና ማዕረግ ማግኛ ጊዜ ተስተካከለ: ${policeId}`,
+      targetPoliceId: policeId,
+      targetMemberName: member.identity.fullName,
+      category: 'rank',
+      newValue: `Step: ${stepDate || 'Unchanged'}, Promo: ${promoDate || 'Unchanged'}`
+    });
+
+    return {
+      success: true,
+      message: `የአባል ${member.identity.fullName} የእርከንና ማዕረግ ማግኛ ጊዜ በፋየርስቶር ተቀምጧል!`
+    };
+  };
+
+  // Apply Step Increment
+  const applyStepIncrement = async (policeId: string) => {
+    const member = getMemberByPoliceId(policeId);
+    if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
+
+    const currentStep = member.salaryStep || 1;
+    const nextStep = Math.min(9, currentStep + 1);
+    const newSalary = SALARY_SCALE_MATRIX[member.salaryGrade]?.[nextStep - 1] || member.baseSalary;
+
+    const nextIncrementDate = new Date();
+    nextIncrementDate.setFullYear(nextIncrementDate.getFullYear() + 2);
+    const nextDateStr = nextIncrementDate.toISOString().substring(0, 10);
+
+    const updated: MemberProfile = {
+      ...member,
+      salaryStep: nextStep,
+      baseSalary: newSalary,
+      lastStepIncrementDate: new Date().toISOString().substring(0, 10),
+      nextStepIncrementDate: nextDateStr
+    };
+
+    setMembers(prev => prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updated : m));
+    await saveMemberToFirebase(updated);
+
+    addAuditLog({
+      user: currentUser?.fullName || 'HR Admin',
+      role: currentRole,
+      action: `የእርከን ጭማሪ ተፈቀደ: ደረጃ ${member.salaryGrade}፣ እርከን ${currentStep} ➜ ${nextStep} (${newSalary.toLocaleString()} ETB)`,
+      targetPoliceId: policeId,
+      targetMemberName: member.identity.fullName,
+      category: 'salary',
+      newValue: `Step ${nextStep}, New Salary: ${newSalary} ETB`
+    });
+
+    const notif: NotificationItem = {
+      id: `notif-step-${Date.now()}`,
+      title: 'የእርከን እድገት ማሳወቂያ',
+      message: `ውድ አባል ${member.identity.fullName} (${policeId})፣ የእርከን እድገትዎ ተፈቅዶ ደመወዝዎ ወደ ${newSalary.toLocaleString()} ETB (እርከን ${nextStep}) አድጓል። ቀጣይ እርከን ማግኛ ቀንዎ ${nextDateStr} ነው።`,
+      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      isRead: false,
+      type: 'salary',
+      targetPoliceId: policeId,
+      linkTab: 'self_service'
+    };
+    setNotifications(prev => [notif, ...prev]);
+    saveNotificationToFirestore(notif);
+
+    return {
+      success: true,
+      message: `ለአባል ${member.identity.fullName} እርከን ${nextStep} በተሳካ ሁኔታ ተፈቅዷል! ደመወዛቸው ወደ ${newSalary.toLocaleString()} ETB አድጓል።`
+    };
+  };
+
   // Helper translation function
   const t = (amText: string, enText: string): string => {
     return language === 'am' ? amText : enText;
@@ -917,6 +1330,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setMembers(prev => [newProfile, ...prev]);
+    saveMemberToFirebase(newProfile);
 
     // Add Audit Log
     addAuditLog({
@@ -941,6 +1355,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       linkTab: 'personnel'
     };
     setNotifications(prev => [newNotif, ...prev]);
+    saveNotificationToFirestore(newNotif);
 
     return {
       success: true,
@@ -1367,6 +1782,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setMembers(prev => [newProfile, ...prev]);
+    saveMemberToFirebase(newProfile);
 
     // Add Audit Log
     addAuditLog({
@@ -1391,6 +1807,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       linkTab: 'personnel'
     };
     setNotifications(prev => [newNotif, ...prev]);
+    saveNotificationToFirestore(newNotif);
 
     return {
       success: true,
@@ -1409,19 +1826,17 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'በመታወቂያ ሲስተሙ ውስጥ የአባል መረጃ አልተገኘም' };
     }
 
+    const updatedMember = {
+      ...member,
+      identity: {
+        ...extIdentity
+      }
+    };
+
     setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId.toUpperCase() === policeId.toUpperCase()) {
-          return {
-            ...m,
-            identity: {
-              ...extIdentity
-            }
-          };
-        }
-        return m;
-      })
+      prev.map(m => (m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m))
     );
+    saveMemberToFirebase(updatedMember);
 
     addAuditLog({
       user: 'HR-Officer',
@@ -1852,10 +2267,14 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedMember: MemberProfile = {
       ...member,
       status: newStatus,
-      documents: [separationDoc, ...member.documents],
+      documents: [separationDoc, ...(member.documents || [])],
       separation: separationRecord,
       userAccount: {
-        ...member.userAccount,
+        ...(member.userAccount || {
+          username: member.policeId.toLowerCase(),
+          isActive: false,
+          createdDate: new Date().toISOString().substring(0, 10)
+        }),
         isActive: false
       }
     };
@@ -2034,6 +2453,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
               effectiveDate: new Date().toISOString().substring(0, 10)
             };
           }
+          saveApplicationToFirestore(updated);
           return updated;
         }
         return a;
@@ -2087,6 +2507,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       linkTab: 'applications'
     };
     setNotifications(prev => [notif, ...prev]);
+    saveNotificationToFirestore(notif);
   };
 
   const markNotificationRead = (id: string) => {
@@ -2215,51 +2636,51 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = new Date().toISOString().replace('T', ' ').substring(0, 16);
 
     // 1. Update member's userAccount field in member profile
-    setMembers(prev =>
-      prev.map(m => {
-        if (m.policeId.toUpperCase() === policeId.toUpperCase()) {
-          return {
-            ...m,
-            userAccount: {
-              username: cleanUser,
-              password: cleanPass,
-              isActive: true,
-              createdDate: m.userAccount?.createdDate || now,
-              createdBy: currentUser?.fullName || 'HR Admin',
-              lastLogin: m.userAccount?.lastLogin
-            }
-          };
-        }
-        return m;
-      })
-    );
-
-    // 2. Upsert in userAccounts list
-    setUserAccounts(prev => {
-      const existingIdx = prev.findIndex(u => u.policeId?.toUpperCase() === policeId.toUpperCase());
-      const accountData: SystemUserAccount = {
-        id: existingIdx >= 0 ? prev[existingIdx].id : `usr-mem-${policeId}`,
+    const updatedMember = {
+      ...targetMember,
+      userAccount: {
         username: cleanUser,
         password: cleanPass,
-        tempPassword: cleanPass,
-        role: 'member',
-        policeId: targetMember.policeId,
-        fullName: targetMember.identity.fullName,
-        department: targetMember.currentDepartment,
-        station: targetMember.currentStation,
         isActive: true,
-        createdDate: existingIdx >= 0 ? prev[existingIdx].createdDate : now,
-        createdBy: currentUser?.fullName || 'HR Admin'
-      };
+        createdDate: targetMember.userAccount?.createdDate || now,
+        createdBy: currentUser?.fullName || 'HR Admin',
+        lastLogin: targetMember.userAccount?.lastLogin
+      }
+    };
 
-      if (existingIdx >= 0) {
+    setMembers(prev =>
+      prev.map(m => (m.policeId.toUpperCase() === policeId.toUpperCase() ? updatedMember : m))
+    );
+    saveMemberToFirebase(updatedMember);
+
+    // 2. Upsert in userAccounts list
+    const existingIdx = userAccounts.findIndex(u => u.policeId?.toUpperCase() === policeId.toUpperCase());
+    const accountData: SystemUserAccount = {
+      id: existingIdx >= 0 ? userAccounts[existingIdx].id : `usr-mem-${policeId}`,
+      username: cleanUser,
+      password: cleanPass,
+      tempPassword: cleanPass,
+      role: 'member',
+      policeId: targetMember.policeId,
+      fullName: targetMember.identity.fullName,
+      department: targetMember.currentDepartment,
+      station: targetMember.currentStation,
+      isActive: true,
+      createdDate: existingIdx >= 0 ? userAccounts[existingIdx].createdDate : now,
+      createdBy: currentUser?.fullName || 'HR Admin'
+    };
+
+    setUserAccounts(prev => {
+      const idx = prev.findIndex(u => u.policeId?.toUpperCase() === policeId.toUpperCase());
+      if (idx >= 0) {
         const copy = [...prev];
-        copy[existingIdx] = accountData;
+        copy[idx] = accountData;
         return copy;
       } else {
         return [accountData, ...prev];
       }
     });
+    saveUserAccountToFirestore(accountData);
 
     addAuditLog({
       user: currentUser?.fullName || 'HR Admin',
@@ -2281,10 +2702,11 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       linkTab: 'user_accounts'
     };
     setNotifications(prev => [notif, ...prev]);
+    saveNotificationToFirestore(notif);
 
     return {
       success: true,
-      message: `ለአባል ${targetMember.identity.fullName} የመግቢያ መለያ በተሳካ ሁኔታ ተዘጋጅቷል!`
+      message: `ለአባል ${targetMember.identity.fullName} የመግቢያ መለያ በተሳካ ሁኔታ ተዘጋጅቷል እና በፋየርስቶር ተቀምጧል!`
     };
   };
 
@@ -2293,12 +2715,17 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.map(u => {
         if (u.id === userId) {
           const nextActive = !u.isActive;
+          const updatedUser = { ...u, isActive: nextActive };
+          saveUserAccountToFirestore(updatedUser);
+
           // Sync with member if it's a member
           if (u.policeId) {
             setMembers(mList =>
               mList.map(m => {
                 if (m.policeId === u.policeId) {
-                  return { ...m, userAccount: { ...m.userAccount, isActive: nextActive } };
+                  const updatedMemberProfile = { ...m, userAccount: { ...m.userAccount, isActive: nextActive } };
+                  saveMemberToFirebase(updatedMemberProfile);
+                  return updatedMemberProfile;
                 }
                 return m;
               })
@@ -2312,7 +2739,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
             targetMemberName: u.fullName,
             category: 'id_integration'
           });
-          return { ...u, isActive: nextActive };
+          return updatedUser;
         }
         return u;
       })
@@ -2337,6 +2764,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setUserAccounts(prev => [newAcc, ...prev]);
+    saveUserAccountToFirestore(newAcc);
 
     addAuditLog({
       user: currentUser?.fullName || 'HR Admin',
@@ -2349,12 +2777,13 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       success: true,
-      message: `የ${data.fullName} መለያ በተሳካ ሁኔታ ተፈጥሯል!`
+      message: `የ${data.fullName} መለያ በተሳካ ሁኔታ ተፈጥሯል እና በፋየርስቶር ተቀምጧል!`
     };
   };
 
   const deleteStaffAccount = (userId: string) => {
     setUserAccounts(prev => prev.filter(u => u.id !== userId));
+    deleteUserAccountFromFirestore(userId);
     return { success: true, message: 'መለያው ተሰርዟል' };
   };
 

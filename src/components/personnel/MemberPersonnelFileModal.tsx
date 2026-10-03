@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useHrms } from '../../context/HrmsContext';
 import {
   MemberProfile,
@@ -33,7 +33,13 @@ import {
   Phone,
   Building,
   Printer,
-  KeyRound
+  KeyRound,
+  Folder,
+  FolderCheck,
+  Check,
+  AlertCircle,
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 
 interface MemberPersonnelFileModalProps {
@@ -43,7 +49,7 @@ interface MemberPersonnelFileModalProps {
 }
 
 export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> = ({
-  member,
+  member: initialMember,
   onClose,
   initialTab = 'overview'
 }) => {
@@ -64,11 +70,25 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
     uploadPersonnelDocument,
     processServiceSeparation,
     updateSalaryGradeStep,
-    getCalculatedPayroll
+    getCalculatedPayroll,
+    getMemberByPoliceId
   } = useHrms();
+
+  // Always use the freshest member state from HrmsContext so newly added items show up immediately!
+  const member = getMemberByPoliceId(initialMember.policeId) || initialMember;
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [actionModal, setActionModal] = useState<string | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auto-dismiss feedback message after 4.5 seconds
+  useEffect(() => {
+    if (feedbackMessage) {
+      const timer = setTimeout(() => setFeedbackMessage(null), 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [feedbackMessage]);
 
   const memberAccount = userAccounts.find(
     u => u.policeId && u.policeId.toUpperCase() === member.policeId.toUpperCase()
@@ -176,17 +196,113 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
 
   const tabs = [
     { id: 'overview', label: t('አጠቃላይ መረጃ', 'Overview'), icon: User },
-    { id: 'rank', label: t('የማዕረግ ታሪክ', 'Rank History'), icon: Award, count: member.rankHistory.length },
+    { id: 'rank', label: t('የማዕረግ ታሪክ', 'Rank History'), icon: Award, count: member.rankHistory?.length },
     { id: 'salary', label: t('ደመወዝ & Payslip', 'Salary & Payslip'), icon: CreditCard },
-    { id: 'transfers', label: t('ዝውውርና ምደባ', 'Postings & Transfers'), icon: PlaneTakeoff, count: member.transferHistory.length },
-    { id: 'training', label: t('ሥልጠናዎች', 'Training'), icon: GraduationCap, count: member.trainingHistory.length },
-    { id: 'performance', label: t('አፈጻጸም / Efficiency', 'Performance'), icon: TrendingUp, count: member.performanceHistory.length },
-    { id: 'leave', label: t('የፈቃድ ማህደር', 'Leave Dossier'), icon: Calendar, count: member.leaveBalance.annualRemaining },
-    { id: 'benefits', label: t('ጥቅማጥቅም', 'Benefits'), icon: Gift },
-    { id: 'disciplinary', label: t('ዲሲፕሊን & ሽልማት', 'Discipline & Awards'), icon: AlertOctagon },
+    { id: 'transfers', label: t('ዝውውርና ምደባ', 'Postings & Transfers'), icon: PlaneTakeoff, count: member.transferHistory?.length },
+    { id: 'training', label: t('ሥልጠናዎች', 'Training'), icon: GraduationCap, count: member.trainingHistory?.length },
+    { id: 'performance', label: t('አፈጻጸም / Efficiency', 'Performance Appraisals'), icon: TrendingUp, count: member.performanceHistory?.length },
+    { id: 'leave', label: t('የፈቃድ ማህደር', 'Leave Dossier'), icon: Calendar, count: member.leaveBalance?.annualRemaining },
+    { id: 'benefits', label: t('ጥቅማጥቅም', 'Benefits'), icon: Gift, count: member.benefits?.length },
+    { id: 'disciplinary', label: t('ዲሲፕሊን & ሽልማት', 'Discipline & Awards'), icon: AlertOctagon, count: (member.disciplinaryRecords?.length || 0) + (member.awardsAndHonors?.length || 0) },
     { id: 'separation', label: t('ስንብት & ጡረታ', 'Separation & Retirement'), icon: LogOut, highlight: member.separation !== undefined },
-    { id: 'documents', label: t('ዲጂታል ሰነዶች', 'Documents Vault'), icon: FolderOpen, count: member.documents.length }
+    { id: 'documents', label: t('ዲጂታል ሰነዶች', 'Documents Vault'), icon: FolderOpen, count: member.documents?.length }
   ];
+
+  // Defined Dossier Folders (የአባሉ ዲጂታል ዶሴ ፎልደሮችና ፋይሎች)
+  const DOSSIER_FOLDERS = [
+    {
+      id: 'folder_personal',
+      nameAm: 'የግል ማህደርና ምደባ',
+      nameEn: 'Personal & Career',
+      icon: User,
+      tabs: [
+        { id: 'overview', label: t('አጠቃላይ መረጃ', 'Overview'), icon: User },
+        { id: 'rank', label: t('የማዕረግ ታሪክ', 'Rank History'), icon: Award, count: member.rankHistory?.length },
+        { id: 'transfers', label: t('ዝውውርና ምደባ', 'Postings & Transfers'), icon: PlaneTakeoff, count: member.transferHistory?.length }
+      ]
+    },
+    {
+      id: 'folder_training',
+      nameAm: 'ስልጠናዎችና ትምህርት',
+      nameEn: 'Trainings & Education',
+      icon: GraduationCap,
+      actionId: 'training',
+      actionLabel: 'ስልጠና መዝግብ',
+      tabs: [
+        { id: 'training', label: t('ሥልጠናዎችና ኮርሶች', 'Training Dossier'), icon: GraduationCap, count: member.trainingHistory?.length }
+      ]
+    },
+    {
+      id: 'folder_performance',
+      nameAm: 'የስራ አፈፃፀም / Efficiency',
+      nameEn: 'Performance & Appraisals',
+      icon: TrendingUp,
+      actionId: 'performance',
+      actionLabel: 'ምዘና አስገባ',
+      tabs: [
+        { id: 'performance', label: t('አፈጻጸም / Efficiency', 'Performance Appraisals'), icon: TrendingUp, count: member.performanceHistory?.length }
+      ]
+    },
+    {
+      id: 'folder_leave',
+      nameAm: 'የፈቃድ ማህደር',
+      nameEn: 'Leave Management',
+      icon: Calendar,
+      actionId: 'leave',
+      actionLabel: 'ፈቃድ መዝግብ',
+      tabs: [
+        { id: 'leave', label: t('የፈቃድ ማህደርና ቀሪ', 'Leave Dossier'), icon: Calendar, count: member.leaveBalance?.annualRemaining }
+      ]
+    },
+    {
+      id: 'folder_payroll',
+      nameAm: 'ደመወዝና ጥቅማጥቅም',
+      nameEn: 'Payroll & Benefits',
+      icon: CreditCard,
+      actionId: 'benefit',
+      actionLabel: 'ጥቅማጥቅም መዝግብ',
+      tabs: [
+        { id: 'salary', label: t('ደመወዝ & Payslip', 'Salary & Payslip'), icon: CreditCard },
+        { id: 'benefits', label: t('ጥቅማጥቅምና አበል', 'Benefits & Allowances'), icon: Gift, count: member.benefits?.length }
+      ]
+    },
+    {
+      id: 'folder_conduct',
+      nameAm: 'ዲስፕሊንና ሽልማት',
+      nameEn: 'Discipline & Awards',
+      icon: AlertOctagon,
+      actionId: 'disciplinary',
+      actionLabel: 'እርምጃ መዝግብ',
+      tabs: [
+        { id: 'disciplinary', label: t('ዲሲፕሊን & ሽልማት', 'Discipline & Awards'), icon: AlertOctagon, count: (member.disciplinaryRecords?.length || 0) + (member.awardsAndHonors?.length || 0) }
+      ]
+    },
+    {
+      id: 'folder_separation',
+      nameAm: 'ስንብት፣ ጡረታና ሰነዶች',
+      nameEn: 'Separation & Records',
+      icon: LogOut,
+      actionId: 'separation',
+      actionLabel: 'ስንብት መዝግብ',
+      tabs: [
+        { id: 'separation', label: t('ስንብት & ጡረታ', 'Separation & Retirement'), icon: LogOut, highlight: member.separation !== undefined },
+        { id: 'documents', label: t('ዲጂታል ሰነዶች (Vault)', 'Document Vault'), icon: FolderOpen, count: member.documents?.length }
+      ]
+    }
+  ];
+
+  // Active Folder State
+  const initialFolder = DOSSIER_FOLDERS.find(f => f.tabs.some(t => t.id === initialTab))?.id || 'folder_personal';
+  const [activeFolderId, setActiveFolderId] = useState<string>(initialFolder);
+  const [showAllTabsMode, setShowAllTabsMode] = useState<boolean>(false);
+
+  // Sync folder when activeTab changes
+  useEffect(() => {
+    const parentFolder = DOSSIER_FOLDERS.find(f => f.tabs.some(t => t.id === activeTab));
+    if (parentFolder && parentFolder.id !== activeFolderId) {
+      setActiveFolderId(parentFolder.id);
+    }
+  }, [activeTab]);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
@@ -316,32 +432,174 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
           </div>
         </div>
 
-        {/* Sub-Navigation Tabs Bar */}
-        <div className="bg-slate-950/80 border-b border-slate-800 px-4 flex space-x-1 overflow-x-auto scrollbar-none">
-          {tabs.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
+        {/* Dossier Folders & Files Navigation Header (የአባሉ ዲጂታል ዶሴ ፎልደሮች) */}
+        <div className="bg-slate-950/95 border-b border-slate-800 px-4 pt-2.5 pb-2">
+          {/* Top Folder Jackets */}
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mr-1 flex-shrink-0">
+                <Folder className="w-3.5 h-3.5 text-amber-400" />
+                {t('የዶሴ ፎልደሮች፡', 'Dossier Folders:')}
+              </span>
+              {DOSSIER_FOLDERS.map(folder => {
+                const isFolderActive = activeFolderId === folder.id;
+                const totalCount = folder.tabs.reduce((sum, t) => sum + (t.count || 0), 0);
+                return (
+                  <button
+                    key={folder.id}
+                    onClick={() => {
+                      setActiveFolderId(folder.id);
+                      if (!folder.tabs.some(t => t.id === activeTab)) {
+                        setActiveTab(folder.tabs[0].id);
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border ${
+                      isFolderActive
+                        ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/10 border-amber-500/50 text-amber-300 shadow-sm'
+                        : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                    }`}
+                  >
+                    <Folder className={`w-3.5 h-3.5 ${isFolderActive ? 'text-amber-400' : 'text-slate-400'}`} />
+                    <span>{t(folder.nameAm, folder.nameEn)}</span>
+                    {totalCount > 0 && (
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-normal ${
+                        isFolderActive ? 'bg-amber-500/30 text-amber-200' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {totalCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* View Mode Toggle Button */}
+            <button
+              onClick={() => setShowAllTabsMode(!showAllTabsMode)}
+              className="text-[11px] text-slate-400 hover:text-amber-400 flex items-center gap-1 whitespace-nowrap px-2.5 py-1 rounded bg-slate-900 border border-slate-800 flex-shrink-0 transition-colors"
+              title={showAllTabsMode ? t('በፎልደር መልክ እይ', 'Folder View') : t('ሁሉንም ርዕሶች ዘርዝር', 'All Tabs View')}
+            >
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              <span>{showAllTabsMode ? t('በፎልደር መልክ', 'Folder View') : t('ሁሉንም ዘርዝር', 'All Tabs')}</span>
+            </button>
+          </div>
+
+          {/* Sub-Files inside the Active Folder (or All Files in All Mode) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1.5 border-t border-slate-800/80">
+            <span className="text-[10px] font-semibold text-slate-400 flex items-center gap-1 mr-1 flex-shrink-0">
+              <FileText className="w-3 h-3 text-slate-400" />
+              {showAllTabsMode ? t('ሁሉም ፋይሎች፡', 'All Files:') : t('በዚህ ፎልደር ውስጥ ያሉ ፋይሎች፡', 'Files in this folder:')}
+            </span>
+            {(showAllTabsMode ? tabs : (DOSSIER_FOLDERS.find(f => f.id === activeFolderId)?.tabs || tabs)).map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border ${
+                    isActive
+                      ? 'bg-amber-400 text-slate-950 font-bold border-amber-400 shadow-sm'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850'
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-950' : 'text-slate-400'}`} />
+                  <span>{tab.label}</span>
+                  {tab.count !== undefined && (
+                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                      isActive ? 'bg-slate-950/20 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quick Admin Actions Bar for the 6 Core Categories */}
+          {currentRole !== 'member' && (
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-2 border-t border-slate-800/60 mt-1.5">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1 flex-shrink-0 mr-1">
+                <Plus className="w-3.5 h-3.5 text-amber-400" />
+                {t('አዲስ መረጃ መዝግብ፡', 'Quick Add:')}
+              </span>
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-all ${
-                  isActive
-                    ? 'border-amber-400 text-amber-400 bg-amber-400/5'
-                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                }`}
+                onClick={() => setActionModal('training')}
+                className="px-2.5 py-1 rounded-md bg-blue-500/20 hover:bg-blue-500 text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 flex items-center gap-1 whitespace-nowrap transition-colors shadow-sm"
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400' : 'text-slate-400'}`} />
-                <span>{tab.label}</span>
-                {tab.count !== undefined && (
-                  <span className="ml-0.5 text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300">
-                    {tab.count}
-                  </span>
-                )}
+                <GraduationCap className="w-3 h-3" />
+                <span>{t('+ ስልጠና መዝግብ', '+ Training')}</span>
               </button>
-            );
-          })}
+              <button
+                onClick={() => setActionModal('performance')}
+                className="px-2.5 py-1 rounded-md bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 text-[11px] font-bold border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap transition-colors shadow-sm"
+              >
+                <TrendingUp className="w-3 h-3" />
+                <span>{t('+ አፈጻጸም ምዘና', '+ Appraisal')}</span>
+              </button>
+              <button
+                onClick={() => setActionModal('leave')}
+                className="px-2.5 py-1 rounded-md bg-sky-500/20 hover:bg-sky-500 text-sky-300 hover:text-white text-[11px] font-bold border border-sky-500/30 flex items-center gap-1 whitespace-nowrap transition-colors shadow-sm"
+              >
+                <Calendar className="w-3 h-3" />
+                <span>{t('+ ፈቃድ መዝግብ', '+ Leave')}</span>
+              </button>
+              <button
+                onClick={() => setActionModal('benefit')}
+                className="px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 text-[11px] font-bold border border-amber-500/30 flex items-center gap-1 whitespace-nowrap transition-colors shadow-sm"
+              >
+                <Gift className="w-3 h-3" />
+                <span>{t('+ ጥቅማጥቅም', '+ Benefit')}</span>
+              </button>
+              <button
+                onClick={() => setActionModal('disciplinary')}
+                className="px-2.5 py-1 rounded-md bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-[11px] font-bold border border-rose-500/30 flex items-center gap-1 whitespace-nowrap transition-colors shadow-sm"
+              >
+                <AlertOctagon className="w-3 h-3" />
+                <span>{t('+ ዲሲፕሊን', '+ Discipline')}</span>
+              </button>
+              <button
+                onClick={() => setActionModal('award')}
+                className="px-2.5 py-1 rounded-md bg-yellow-500/20 hover:bg-yellow-500 text-yellow-300 hover:text-slate-950 text-[11px] font-bold border border-yellow-500/30 flex items-center gap-1 whitespace-nowrap transition-colors shadow-sm"
+              >
+                <Award className="w-3 h-3" />
+                <span>{t('+ ሽልማት', '+ Award')}</span>
+              </button>
+              <button
+                onClick={() => setActionModal('separation')}
+                className="px-2.5 py-1 rounded-md bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-white text-[11px] font-bold border border-purple-500/30 flex items-center gap-1 whitespace-nowrap transition-colors shadow-sm"
+              >
+                <LogOut className="w-3 h-3" />
+                <span>{t('+ ስንብት/ጡረታ', '+ Separation')}</span>
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Global Feedback Banner */}
+        {feedbackMessage && (
+          <div className={`mx-4 sm:mx-6 mt-3 p-3 rounded-xl border flex items-center justify-between text-xs font-semibold shadow-md ${
+            feedbackMessage.type === 'success'
+              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+              : 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+          }`}>
+            <div className="flex items-center gap-2">
+              {feedbackMessage.type === 'success' ? (
+                <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              )}
+              <span>{feedbackMessage.text}</span>
+            </div>
+            <button
+              onClick={() => setFeedbackMessage(null)}
+              className="text-slate-400 hover:text-white ml-2 text-xs font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Main Content Area */}
         <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
@@ -860,7 +1118,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   </p>
                 </div>
 
-                {currentRole === 'hr_admin' && (
+                {currentRole !== 'member' && (
                   <button
                     onClick={() => setActionModal('training')}
                     className="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow"
@@ -924,7 +1182,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   </p>
                 </div>
 
-                {currentRole === 'supervisor' || currentRole === 'hr_admin' ? (
+                {currentRole !== 'member' ? (
                   <button
                     onClick={() => setActionModal('performance')}
                     className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
@@ -993,7 +1251,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   </p>
                 </div>
 
-                {currentRole === 'hr_admin' && (
+                {currentRole !== 'member' && (
                   <button
                     onClick={() => setActionModal('leave')}
                     className="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow"
@@ -1064,7 +1322,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   </p>
                 </div>
 
-                {currentRole === 'hr_admin' && (
+                {currentRole !== 'member' && (
                   <button
                     onClick={() => setActionModal('benefit')}
                     className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
@@ -1113,7 +1371,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                     <AlertOctagon className="w-4 h-4" />
                     {t('የዲሲፕሊን መዝገብ (Disciplinary Dossier)', 'Disciplinary Records')}
                   </h4>
-                  {currentRole === 'hr_admin' && (
+                  {currentRole !== 'member' && (
                     <button
                       onClick={() => setActionModal('disciplinary')}
                       className="px-2.5 py-1 rounded bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1 shadow"
@@ -1154,7 +1412,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                     <Award className="w-4 h-4" />
                     {t('ሽልማቶችና የክብር ሜዳሊያዎች (Awards & Honors)', 'Honors & Citations')}
                   </h4>
-                  {currentRole === 'hr_admin' && (
+                  {currentRole !== 'member' && (
                     <button
                       onClick={() => setActionModal('award')}
                       className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1 shadow"
@@ -1201,7 +1459,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   </p>
                 </div>
 
-                {!member.separation && currentRole === 'hr_admin' && (
+                {!member.separation && currentRole !== 'member' && (
                   <button
                     onClick={() => setActionModal('separation')}
                     className="px-3.5 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 shadow"
@@ -1674,19 +1932,30 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   {t('ሰርዝ', 'Cancel')}
                 </button>
                 <button
-                  onClick={() => {
-                    processServiceSeparation(member.policeId, {
-                      type: sepType,
-                      reason: sepReason,
-                      decisionRef: sepRef,
-                      pensionEligible: sepPension,
-                      pensionBookRef: sepPension ? sepPensionBook : undefined
-                    });
-                    setActionModal(null);
+                  disabled={!sepReason.trim() || isSubmitting}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      const res = await processServiceSeparation(member.policeId, {
+                        type: sepType,
+                        reason: sepReason,
+                        decisionRef: sepRef,
+                        pensionEligible: sepPension,
+                        pensionBookRef: sepPension ? sepPensionBook : undefined
+                      });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የአገልግሎት ስንብትና ጡረታ ሰነድ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setActionModal(null);
+                      setActiveTab('separation');
+                    } catch (err: any) {
+                      setFeedbackMessage({ type: 'error', text: err?.message || 'ስንብቱን ማስቀመጥ አልተቻለም' });
+                    } finally {
+                      setIsSubmitting(false);
+                    }
                   }}
-                  className="px-4 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg text-xs"
+                  className="px-4 py-1.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5"
                 >
-                  {t('ስንብት አጽድቅና ማህደር ዝጋ', 'Execute Separation')}
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ስንብት አጽድቅና በፋየርስቶር አስቀምጥ', 'Execute Separation & Save to Firestore')}</span>
                 </button>
               </div>
             </div>
@@ -1778,11 +2047,756 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                       fileSizeText: '1.8 MB',
                       notes: docNotes
                     });
+                    setFeedbackMessage({ type: 'success', text: t('ሰነዱ በማህደር ላይ በተሳካ ሁኔታ ተያይዟል!', 'Document successfully attached to dossier!') });
                     setActionModal(null);
                   }}
                   className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs"
                 >
                   {t('በማህደር ላይ አያይዝ', 'Save to Personnel File')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 6. Training Record Modal */}
+        {actionModal === 'training' && (
+          <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <GraduationCap className="w-4 h-4 text-blue-400" />
+                  {t('አዲስ ስልጠናና የትምህርት ማስረጃ መዝግብ', 'Assign & Log Police Training')}
+                </h4>
+                <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የስልጠናው ርዕስ/ኮርስ', 'Training / Course Title')}</label>
+                <input
+                  type="text"
+                  required
+                  value={trTitle}
+                  onChange={e => setTrTitle(e.target.value)}
+                  placeholder="ለምሳሌ፡ ዘመናዊ የወንጀል መከላከልና ማህበረሰብ ፖሊሲንግ"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የስልጠና ዘርፍ/አይነት', 'Training Category')}</label>
+                  <select
+                    value={trType}
+                    onChange={e => setTrType(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="የወንጀል ምርመራ">የወንጀል ምርመራና ፎረንሲክ</option>
+                    <option value="መሰረታዊ ወታደራዊ">መሰረታዊ ወታደራዊና ፖሊሳዊ</option>
+                    <option value="የትራፊክ ቁጥጥር">የትራፊክ ደህንነትና ቁጥጥር</option>
+                    <option value="ልዩ ኮማንዶ">ልዩ ፈጣን ኃይልና ኮማንዶ</option>
+                    <option value="የአመራር ክህሎት">የአመራርና አስተዳደር ክህሎት</option>
+                    <option value="የሰብዓዊ መብቶች">የሰብዓዊ መብትና ህግጋት</option>
+                    <option value="የቴክኖሎጂ/ሳይበር">የኢንፎርሜሽን ቴክኖሎጂና ሳይበር</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('ያሰለጠነው ተቋም/ኮሌጅ', 'Training Institution')}</label>
+                  <input
+                    type="text"
+                    required
+                    value={trInst}
+                    onChange={e => setTrInst(e.target.value)}
+                    placeholder="ለምሳሌ፡ የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሌጅ"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የጀመረበት ቀን', 'Start Date')}</label>
+                  <input
+                    type="date"
+                    value={trStart}
+                    onChange={e => setTrStart(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የተጠናቀቀበት ቀን', 'End Date')}</label>
+                  <input
+                    type="date"
+                    value={trEnd}
+                    onChange={e => setTrEnd(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('ሁኔታ (Status)', 'Status')}</label>
+                  <select
+                    value={trStatus}
+                    onChange={e => setTrStatus(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="የተጠናቀቀ">የተጠናቀቀ</option>
+                    <option value="በሂደት ላይ">በሂደት ላይ</option>
+                    <option value="የተመደበ">የተመደበ</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('ውጤት / Grade', 'Grade / Score')}</label>
+                  <input
+                    type="text"
+                    value={trGrade}
+                    onChange={e => setTrGrade(e.target.value)}
+                    placeholder="እጅግ የላቀ (A) / 95%"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የሰርተፊኬት ቁጥር', 'Certificate Ref')}</label>
+                  <input
+                    type="text"
+                    value={trCertRef}
+                    onChange={e => setTrCertRef(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onClick={() => setActionModal(null)} className="px-3 py-1.5 text-xs text-slate-400">
+                  {t('ሰርዝ', 'Cancel')}
+                </button>
+                <button
+                  disabled={!trTitle.trim() || isSubmitting}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      const res = await assignTraining(member.policeId, {
+                        title: trTitle,
+                        trainingType: trType,
+                        institution: trInst,
+                        startDate: trStart,
+                        endDate: trEnd,
+                        status: trStatus,
+                        gradeOrScore: trGrade,
+                        certificateRef: trCertRef
+                      });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'ስልጠናው በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setActionModal(null);
+                    } catch (err: any) {
+                      setFeedbackMessage({ type: 'error', text: err?.message || 'ስልጠናውን ማስቀመጥ አልተቻለም' });
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ስልጠና መዝግብና በፋየርስቶር አስቀምጥ', 'Save Training to Firestore')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 7. Performance Evaluation Modal */}
+        {actionModal === 'performance' && (
+          <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                  {t('የአፈጻጸም / Efficiency ምዘና ውጤት መዝግብ', 'Log Performance & Efficiency Appraisal')}
+                </h4>
+                <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የምዘና ወቅት (Period)', 'Evaluation Period')}</label>
+                  <input
+                    type="text"
+                    required
+                    value={evalPeriod}
+                    onChange={e => setEvalPeriod(e.target.value)}
+                    placeholder="ለምሳሌ፡ 2018 ዓ.ም - 1ኛ ሩብ ዓመት"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የምዘና ዓ.ም (Year)', 'Year')}</label>
+                  <input
+                    type="number"
+                    value={evalYear}
+                    onChange={e => setEvalYear(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    {t('የተገኘ ውጤት (Score %)', 'Score (0-100%)')}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={evalScore}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setEvalScore(val);
+                      if (val >= 90) setEvalRating('እጅግ የላቀ (90-100)');
+                      else if (val >= 80) setEvalRating('ከፍተኛ (80-89)');
+                      else if (val >= 65) setEvalRating('መካከለኛ (65-79)');
+                      else setEvalRating('ዝቅተኛ (<65)');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-emerald-400 font-mono font-bold text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('ደረጃ (Rating)', 'Appraisal Rating')}</label>
+                  <select
+                    value={evalRating}
+                    onChange={e => setEvalRating(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="እጅግ የላቀ (90-100)">እጅግ የላቀ (90-100)</option>
+                    <option value="ከፍተኛ (80-89)">ከፍተኛ (80-89)</option>
+                    <option value="መካከለኛ (65-79)">መካከለኛ (65-79)</option>
+                    <option value="ዝቅተኛ (<65)">ዝቅተኛ (&lt;65)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የተመዘገበ ዋና ጥንካሬ', 'Key Strengths Observed')}</label>
+                <textarea
+                  rows={2}
+                  value={evalStrength}
+                  onChange={e => setEvalStrength(e.target.value)}
+                  placeholder="ለምሳሌ፡ የስራ ሰዓት አክባሪነት፣ ተልዕኮዎችን በብቃት መወጣት..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('መሻሻል ያለበት ክፍተት', 'Areas for Improvement')}</label>
+                <textarea
+                  rows={2}
+                  value={evalImprove}
+                  onChange={e => setEvalImprove(e.target.value)}
+                  placeholder="ለምሳሌ፡ የሪፖርት አቀራረብ ክህሎትን ማሻሻል..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('ገምጋሚ ኃላፊ ስም', 'Supervisor Name')}</label>
+                  <input
+                    type="text"
+                    value={evalSupName}
+                    onChange={e => setEvalSupName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የኃላፊው ማዕረግ', 'Supervisor Rank')}</label>
+                  <input
+                    type="text"
+                    value={evalSupRank}
+                    onChange={e => setEvalSupRank(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የመጨረሻ ውሳኔና አስተያየት', 'Decision / Recommendation')}</label>
+                <input
+                  type="text"
+                  value={evalDecision}
+                  onChange={e => setEvalDecision(e.target.value)}
+                  placeholder="ለምሳሌ፡ ለማዕረግ እድገትና ተጨማሪ ኃላፊነት ብቁ ነው"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onClick={() => setActionModal(null)} className="px-3 py-1.5 text-xs text-slate-400">
+                  {t('ሰርዝ', 'Cancel')}
+                </button>
+                <button
+                  disabled={isSubmitting}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      const res = await submitPerformanceEvaluation(member.policeId, {
+                        evaluationPeriod: evalPeriod,
+                        year: evalYear,
+                        score: Number(evalScore),
+                        rating: evalRating,
+                        strength: evalStrength,
+                        improvementArea: evalImprove,
+                        finalDecision: evalDecision,
+                        supervisorName: evalSupName,
+                        supervisorRank: evalSupRank,
+                        date: new Date().toISOString().substring(0, 10)
+                      });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የአፈጻጸም ምዘናው በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setActionModal(null);
+                    } catch (err: any) {
+                      setFeedbackMessage({ type: 'error', text: err?.message || 'ምዘናውን ማስቀመጥ አልተቻለም' });
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ምዘና መዝግብና በፋየርስቶር አስቀምጥ', 'Save Evaluation to Firestore')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 8. Leave Dossier Modal */}
+        {actionModal === 'leave' && (
+          <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-blue-400" />
+                  {t('የእረፍት ፈቃድ መዝግብና ፍቀድ', 'Grant & Log Leave Dossier')}
+                </h4>
+                <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የፈቃድ አይነት', 'Leave Type')}</label>
+                <select
+                  value={leaveType}
+                  onChange={e => setLeaveType(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                >
+                  <option value="ዓመታዊ እረፍት">ዓመታዊ እረፍት (Annual Leave)</option>
+                  <option value="የህመም ፈቃድ">የህመም ፈቃድ (Sick Leave)</option>
+                  <option value="የወሊድ ፈቃድ">የወሊድ ፈቃድ (Maternity Leave)</option>
+                  <option value="የሀዘን ፈቃድ">የሀዘን ፈቃድ (Bereavement Leave)</option>
+                  <option value="የጋብቻ ፈቃድ">የጋብቻ ፈቃድ (Marriage Leave)</option>
+                  <option value="ልዩ ፈቃድ">ልዩ ተልዕኮ ፈቃድ (Special Leave)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የፈቃድ ቀናት ብዛት', 'Number of Days')}</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={leaveDays}
+                  onChange={e => setLeaveDays(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የመነሻ ቀን', 'Start Date')}</label>
+                  <input
+                    type="date"
+                    value={leaveStart}
+                    onChange={e => setLeaveStart(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የማብቂያ ቀን', 'End Date')}</label>
+                  <input
+                    type="date"
+                    value={leaveEnd}
+                    onChange={e => setLeaveEnd(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የፈቃድ ምክንያትና ማብራሪያ', 'Reason & Details')}</label>
+                <textarea
+                  rows={2}
+                  value={leaveReason}
+                  onChange={e => setLeaveReason(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onClick={() => setActionModal(null)} className="px-3 py-1.5 text-xs text-slate-400">
+                  {t('ሰርዝ', 'Cancel')}
+                </button>
+                <button
+                  disabled={isSubmitting}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      const res = await addLeaveRecord(member.policeId, {
+                        leaveType,
+                        durationDays: Number(leaveDays),
+                        startDate: leaveStart,
+                        endDate: leaveEnd,
+                        reason: leaveReason,
+                        status: 'የተፈቀደ',
+                        approvedBy: 'የሰው ኃይል አስተዳደርና ልማት',
+                        approvedDate: new Date().toISOString().substring(0, 10)
+                      });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የእረፍት ፈቃዱ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setActionModal(null);
+                    } catch (err: any) {
+                      setFeedbackMessage({ type: 'error', text: err?.message || 'ፈቃዱን ማስቀመጥ አልተቻለም' });
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ፈቃድ መዝግብና በፋየርስቶር አስቀምጥ', 'Save Leave to Firestore')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 9. Benefits Modal */}
+        {actionModal === 'benefit' && (
+          <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Gift className="w-4 h-4 text-amber-400" />
+                  {t('አዲስ ጥቅማጥቅምና ልዩ አበል መዝግብ', 'Assign Institutional Benefit / Allowance')}
+                </h4>
+                <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የጥቅማጥቅም ርዕስ', 'Benefit Title')}</label>
+                <input
+                  type="text"
+                  required
+                  value={benTitle}
+                  onChange={e => setBenTitle(e.target.value)}
+                  placeholder="ለምሳሌ፡ የአደጋ ስጋት ልዩ አበል"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የጥቅማጥቅም አይነት', 'Benefit Type')}</label>
+                  <select
+                    value={benType}
+                    onChange={e => setBenType(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="hazard">የአደጋ ስጋት (Hazard)</option>
+                    <option value="housing">የመኖሪያ ቤት ድጎማ (Housing)</option>
+                    <option value="transport">የትራንስፖርት ድጎማ (Transport)</option>
+                    <option value="duty">የስራ ኃላፊነት (Duty)</option>
+                    <option value="field">የመስክ አበል (Field)</option>
+                    <option value="medical">የህክምና ሽፋን (Medical)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የወር መጠን በብር', 'Monthly Amount (ETB)')}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={benAmount}
+                    onChange={e => setBenAmount(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-amber-400 font-mono font-bold"
+                  />
+                  <span className="text-[10px] text-slate-400">0 ማለት ሙሉ ሽፋን (100% Covered) ነው</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የሚጀምርበት ቀን', 'Effective Date')}</label>
+                  <input
+                    type="date"
+                    value={benStart}
+                    onChange={e => setBenStart(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('ሁኔታ', 'Status')}</label>
+                  <select
+                    value={benStatus}
+                    onChange={e => setBenStatus(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="active">ገባሪ (Active)</option>
+                    <option value="inactive">የማይንቀሳቀስ (Inactive)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('ተጨማሪ ማስታወሻ/ትዕዛዝ', 'Remarks / Authorization')}</label>
+                <textarea
+                  rows={2}
+                  value={benRemarks}
+                  onChange={e => setBenRemarks(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onClick={() => setActionModal(null)} className="px-3 py-1.5 text-xs text-slate-400">
+                  {t('ሰርዝ', 'Cancel')}
+                </button>
+                <button
+                  disabled={!benTitle.trim() || isSubmitting}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      const res = await addBenefitRecord(member.policeId, {
+                        title: benTitle,
+                        type: benType,
+                        monthlyAmount: Number(benAmount),
+                        startDate: benStart,
+                        status: benStatus,
+                        remarks: benRemarks
+                      });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'ጥቅማጥቅሙ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setActionModal(null);
+                    } catch (err: any) {
+                      setFeedbackMessage({ type: 'error', text: err?.message || 'ጥቅማጥቅሙን ማስቀመጥ አልተቻለም' });
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ጥቅማጥቅም መዝግብና አስቀምጥ', 'Save Benefit to Firestore')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 10. Disciplinary Modal */}
+        {actionModal === 'disciplinary' && (
+          <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <AlertOctagon className="w-4 h-4 text-rose-400" />
+                  {t('የዲሲፕሊን ግድፈትና እርምጃ መዝግብ', 'Log Disciplinary Action Record')}
+                </h4>
+                <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የተፈጸመው ጥፋት/ግድፈት', 'Incident / Infraction')}</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={discIncident}
+                  onChange={e => setDiscIncident(e.target.value)}
+                  placeholder="ለምሳሌ፡ የስራ ሰዓት ያለፈቃድ ማሳለፍ፣ የትእዛዝ አለማክበር..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የተወሰደ የቅጣት እርምጃ', 'Disciplinary Measure Taken')}</label>
+                <input
+                  type="text"
+                  required
+                  value={discMeasure}
+                  onChange={e => setDiscMeasure(e.target.value)}
+                  placeholder="ለምሳሌ፡ የፅሁፍ ማስጠንቀቂያና የ100 ብር ቅጣት"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የተወሰነበት ቀን', 'Date')}</label>
+                  <input
+                    type="date"
+                    value={discDate}
+                    onChange={e => setDiscDate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የውሳኔ ቁጥር (Verdict Ref)', 'Verdict Ref')}</label>
+                  <input
+                    type="text"
+                    value={discRef}
+                    onChange={e => setDiscRef(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የመዝገብ ሁኔታ', 'Status')}</label>
+                <select
+                  value={discStatus}
+                  onChange={e => setDiscStatus(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                >
+                  <option value="የተዘጋ">የተዘጋ (Closed)</option>
+                  <option value="በክትትል ላይ">በክትትል ላይ (Under Probation)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onClick={() => setActionModal(null)} className="px-3 py-1.5 text-xs text-slate-400">
+                  {t('ሰርዝ', 'Cancel')}
+                </button>
+                <button
+                  disabled={!discIncident.trim() || !discMeasure.trim() || isSubmitting}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      const res = await addDisciplinaryRecord(member.policeId, {
+                        incident: discIncident,
+                        measureTaken: discMeasure,
+                        date: discDate,
+                        verdictRef: discRef,
+                        status: discStatus
+                      });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የዲሲፕሊን እርምጃው በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setActionModal(null);
+                    } catch (err: any) {
+                      setFeedbackMessage({ type: 'error', text: err?.message || 'እርምጃውን ማስቀመጥ አልተቻለም' });
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="px-4 py-1.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('እርምጃ መዝግብና አስቀምጥ', 'Save Record to Firestore')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 11. Award Modal */}
+        {actionModal === 'award' && (
+          <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-400" />
+                  {t('ሽልማትና የክብር ሜዳሊያ መዝግብ', 'Grant Award & Honor Citation')}
+                </h4>
+                <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የሽልማት/ሜዳሊያ ስም', 'Award / Honor Title')}</label>
+                <input
+                  type="text"
+                  required
+                  value={awdTitle}
+                  onChange={e => setAwdTitle(e.target.value)}
+                  placeholder="ለምሳሌ፡ የላቀ የጀግንነት ሜዳሊያ"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የሽልማቱ ምክንያት / Citation', 'Reason / Citation')}</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={awdReason}
+                  onChange={e => setAwdReason(e.target.value)}
+                  placeholder="ለምሳሌ፡ በህዳሴ ግድብ አካባቢ ላሳዩት የላቀ የጀግንነት ተጋድሎ..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የተሰጠበት ቀን', 'Date')}</label>
+                  <input
+                    type="date"
+                    value={awdDate}
+                    onChange={e => setAwdDate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የሰርተፊኬት/ሜዳሊያ ቁጥር', 'Certificate / Medal Ref')}</label>
+                  <input
+                    type="text"
+                    value={awdRef}
+                    onChange={e => setAwdRef(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የሰጠው የበላይ አካል', 'Awarded By')}</label>
+                <input
+                  type="text"
+                  value={awdBy}
+                  onChange={e => setAwdBy(e.target.value)}
+                  placeholder="የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሚሽነር"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onClick={() => setActionModal(null)} className="px-3 py-1.5 text-xs text-slate-400">
+                  {t('ሰርዝ', 'Cancel')}
+                </button>
+                <button
+                  disabled={!awdTitle.trim() || isSubmitting}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      const res = await addAwardRecord(member.policeId, {
+                        title: awdTitle,
+                        reason: awdReason,
+                        date: awdDate,
+                        awardedBy: awdBy,
+                        medalOrCertRef: awdRef
+                      });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የክብር ሽልማቱ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setActionModal(null);
+                    } catch (err: any) {
+                      setFeedbackMessage({ type: 'error', text: err?.message || 'ሽልማቱን ማስቀመጥ አልተቻለም' });
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ሽልማት መዝግብና አስቀምጥ', 'Save Award to Firestore')}</span>
                 </button>
               </div>
             </div>

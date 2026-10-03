@@ -240,10 +240,18 @@ export interface MemberProfile {
   currentRank: PoliceRank;
   currentDepartment: DepartmentName;
   currentStation: StationLocation;
+  dutyStationAddress?: string; // ይፋዊ የስራ ቦታ አድራሻ (ለምሳሌ፡ የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሚሽን ዋና መምሪያ - አሶሳ)
+  isCommissionStaff?: boolean; // በፖሊስ ኮሚሽን ዋና መ/ቤት የሚሰራ አባል
   position: string;
   employmentDate: string;
   employmentType: 'ቋሚ (Permanent)' | 'ኮንትራት (Contract)' | 'ልዩ ምደባ (Special Assignment)';
   status: EmploymentStatus;
+
+  // Step Increment & Promotion Eligibility Tracking (የእርከንና የማዕረግ ማግኛ ጊዜ)
+  nextStepIncrementDate?: string; // ቀጣይ እርከን ማግኛ ቀን (YYYY-MM-DD)
+  nextPromotionEligibilityDate?: string; // ቀጣይ የማዕረግ እድገት ማግኛ ቀን (YYYY-MM-DD)
+  lastStepIncrementDate?: string; // ያለፈው እርከን የተሰጠበት ቀን
+  lastPromotionDate?: string; // ያለፈው ማዕረግ የተሰጠበት ቀን
 
   // Compensation & Grade
   salaryGrade: number; // 1 to 10
@@ -547,4 +555,27 @@ export interface CalculatedOfficerPayroll {
     totalDeductions: number;
   };
   netPay: number;
+}
+
+export interface MonthlyPayrollArchive {
+  id: string; // e.g. "payroll-2026-09"
+  monthName: string; // e.g. "መስከረም 2019 ዓ.ም (September 2026)"
+  year: number;
+  monthIndex: number; // 1-12
+  createdAt: string;
+  processedBy: string;
+  totalOfficers: number;
+  totalBaseSalary: number;
+  totalRationAllowance: number;
+  totalAllowances: number;
+  totalGrossSalary: number;
+  totalPensionEmployee: number;
+  totalPensionEmployer: number;
+  totalIncomeTax: number;
+  totalDeductions: number;
+  totalNetPay: number;
+  records: CalculatedOfficerPayroll[];
+  status: 'draft' | 'finalized' | 'approved' | 'paid';
+  approvalRef?: string;
+  notes?: string;
 }

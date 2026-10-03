@@ -21,6 +21,9 @@ export const SeparationManager: React.FC = () => {
   const [selectedMember, setSelectedMember] = useState<MemberProfile | null>(null);
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [targetMemberForSeparation, setTargetMemberForSeparation] = useState<MemberProfile | null>(null);
+  const [selectedPoliceIdForModal, setSelectedPoliceIdForModal] = useState<string>('');
+  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form states
   const [sepType, setSepType] = useState<SeparationType>('በጡረታ የተሰናበተ (Retirement)');
@@ -32,6 +35,9 @@ export const SeparationManager: React.FC = () => {
   // Filter separated members
   const separatedMembers = members.filter(m => m.separation !== undefined || m.status === 'retired' || m.status === 'dismissed');
 
+  // Filter active members eligible for separation
+  const activeMembersForSelection = members.filter(m => !m.separation && m.status !== 'retired' && m.status !== 'dismissed');
+
   // Filter near-retirement members (e.g. DOB before 1970 or service years > 20)
   const nearRetirementMembers = members.filter(m => {
     if (m.separation) return false;
@@ -40,20 +46,32 @@ export const SeparationManager: React.FC = () => {
     return age >= 52;
   });
 
-  const handleExecuteSeparation = (e: React.FormEvent) => {
+  const handleExecuteSeparation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetMemberForSeparation) return;
+    const pid = targetMemberForSeparation?.policeId || selectedPoliceIdForModal;
+    if (!pid) {
+      setFeedbackMessage({ type: 'error', text: 'እባክዎ አባል ይምረጡ' });
+      return;
+    }
 
-    processServiceSeparation(targetMemberForSeparation.policeId, {
-      type: sepType,
-      reason: sepReason,
-      decisionRef: sepRef,
-      pensionEligible,
-      pensionBookRef: pensionEligible ? pensionBookRef : undefined
-    });
-
-    setShowProcessModal(false);
-    setTargetMemberForSeparation(null);
+    setIsSubmitting(true);
+    try {
+      const res = await processServiceSeparation(pid, {
+        type: sepType,
+        reason: sepReason,
+        decisionRef: sepRef,
+        pensionEligible,
+        pensionBookRef: pensionEligible ? pensionBookRef : undefined
+      });
+      setFeedbackMessage({ type: 'success', text: res.message || 'የአገልግሎት ስንብትና ጡረታ ሰነድ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+      setShowProcessModal(false);
+      setTargetMemberForSeparation(null);
+      setSelectedPoliceIdForModal('');
+    } catch (err: any) {
+      setFeedbackMessage({ type: 'error', text: err?.message || 'ስንብቱን ማስቀመጥ አልተቻለም' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -79,12 +97,41 @@ export const SeparationManager: React.FC = () => {
           </p>
         </div>
 
-        <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center flex-shrink-0">
-          <div className="text-[11px] font-semibold text-slate-400">{t('ጡረታ የተሰናበቱ', 'Retired Officers')}</div>
-          <div className="text-2xl font-black text-amber-400 font-mono mt-0.5">{separatedMembers.length}</div>
-          <div className="text-[10px] text-slate-400 mt-0.5">{t('የተዘጉ ማህደሮች', 'Archived Files')}</div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => {
+              setTargetMemberForSeparation(null);
+              setSelectedPoliceIdForModal(activeMembersForSelection[0]?.policeId || '');
+              setShowProcessModal(true);
+            }}
+            className="px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>{t('አዲስ የስንብት/ጡረታ ሂደት መዝግብ', 'Process New Separation / Retirement')}</span>
+          </button>
+
+          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center flex-shrink-0">
+            <div className="text-[11px] font-semibold text-slate-400">{t('ጡረታ የተሰናበቱ', 'Retired Officers')}</div>
+            <div className="text-2xl font-black text-amber-400 font-mono mt-0.5">{separatedMembers.length}</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">{t('የተዘጉ ማህደሮች', 'Archived Files')}</div>
+          </div>
         </div>
       </div>
+
+      {/* Feedback Banner */}
+      {feedbackMessage && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between text-xs font-semibold shadow-md ${
+          feedbackMessage.type === 'success'
+            ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+            : 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            {feedbackMessage.type === 'success' ? <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />}
+            <span>{feedbackMessage.text}</span>
+          </div>
+          <button onClick={() => setFeedbackMessage(null)} className="text-slate-400 hover:text-white ml-2 text-xs font-bold">✕</button>
+        </div>
+      )}
 
       {/* Near Retirement Alert Section */}
       <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-sm space-y-3">
@@ -218,7 +265,7 @@ export const SeparationManager: React.FC = () => {
       </div>
 
       {/* Separation Processing Modal */}
-      {showProcessModal && targetMemberForSeparation && (
+      {showProcessModal && (
         <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -227,12 +274,36 @@ export const SeparationManager: React.FC = () => {
                   <LogOut className="w-4 h-4" />
                   {t('የአገልግሎት ስንብትና ጡረታ መዝግብ', 'Formal Separation & Clearance')}
                 </h4>
-                <p className="text-xs text-slate-400">{targetMemberForSeparation.identity.fullName} ({targetMemberForSeparation.policeId})</p>
+                <p className="text-xs text-slate-400">
+                  {targetMemberForSeparation
+                    ? `${targetMemberForSeparation.identity.fullName} (${targetMemberForSeparation.policeId})`
+                    : t('ስንብት ወይም ጡረታ የሚመዘገብለትን አባል ይምረጡ', 'Select active police officer')}
+                </p>
               </div>
               <button onClick={() => setShowProcessModal(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
             <form onSubmit={handleExecuteSeparation} className="space-y-3.5">
+              {!targetMemberForSeparation && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    {t('የሚሰናበተውን/ጡረተኛውን አባል ይምረጡ *', 'Select Officer *')}
+                  </label>
+                  <select
+                    required
+                    value={selectedPoliceIdForModal}
+                    onChange={e => setSelectedPoliceIdForModal(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white"
+                  >
+                    <option value="">-- {t('አባል ይምረጡ', 'Choose Officer')} --</option>
+                    {activeMembersForSelection.map(m => (
+                      <option key={m.policeId} value={m.policeId}>
+                        {m.policeId} - {m.identity.fullName} ({m.currentRank} - {m.currentDepartment})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">{t('የስንብት አይነት', 'Separation Type')}</label>
                 <select
@@ -305,9 +376,11 @@ export const SeparationManager: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg text-xs"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
                 >
-                  {t('ስንብት አጽድቅና ማህደር ዝጋ', 'Execute Separation')}
+                  <CheckCircle className="w-4 h-4" />
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving to Firestore...') : t('ስንብት አጽድቅና በፋየርስቶር አስቀምጥ', 'Execute Separation & Save to Firestore')}</span>
                 </button>
               </div>
             </form>

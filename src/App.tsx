@@ -101,7 +101,7 @@ const MainAppContent: React.FC = () => {
           <ReportsHub />
         )}
 
-        {activeTab === 'audit' && (
+        {(activeTab === 'audit' || activeTab === 'audit_trail') && (
           <AuditTrailViewer />
         )}
       </main>
