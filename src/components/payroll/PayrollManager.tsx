@@ -5,7 +5,6 @@ import {
   FileSpreadsheet,
   Download,
   Printer,
-  ChevronDown,
   Layers,
   Banknote,
   Search,
@@ -24,16 +23,30 @@ import {
   Settings,
   Bell,
   Send,
-  AlertCircle
+  AlertCircle,
+  Calendar,
+  Building,
+  Check,
+  FileText,
+  Clock,
+  Sparkles,
+  ArrowRight,
+  TrendingUp,
+  MapPin,
+  Shield
 } from 'lucide-react';
 import {
   MemberProfile,
   PoliceRank,
   RankSalaryGradeScale,
-  PayrollGlobalConfig
+  PayrollGlobalConfig,
+  MonthlyPayrollArchive,
+  CalculatedOfficerPayroll,
+  MemberPayrollCustomization
 } from '../../types/hrms';
 import { MemberPersonnelFileModal } from '../personnel/MemberPersonnelFileModal';
 import { OfficerSalaryAdjustmentModal } from './OfficerSalaryAdjustmentModal';
+import { HistoricalPayrollModal } from './HistoricalPayrollModal';
 import { calculateOfficerPayroll } from '../../utils/payrollCalculator';
 
 export const PayrollManager: React.FC = () => {
@@ -49,40 +62,83 @@ export const PayrollManager: React.FC = () => {
     updateSalaryScales,
     applyRankSalaryScaleToAllMembers,
     getCalculatedPayroll,
-    allCalculatedPayrolls,
+    commissionOnlyPayrollMembers,
+    isCommissionOfficer,
+    monthlyPayrollArchives,
+    saveCurrentMonthlyPayrollArchive,
+    quickAdjustSalaryByPoliceId,
+    quickAdjustDeductionsByPoliceId,
     sendPayslipReadyNotification,
-    notifyAllMembersPayrollReady
+    notifyAllMembersPayrollReady,
+    eligibleStepIncrementMembers,
+    eligibleRankPromotionMembers,
+    applyStepIncrement,
+    getMemberByPoliceId
   } = useHrms();
 
   const [activeTab, setActiveTab] = useState<
-    'payroll_sheet' | 'officer_calculator' | 'scale_matrix' | 'deduction_rules'
+    'payroll_sheet' | 'payroll_history' | 'quick_adjust' | 'scale_matrix' | 'deduction_rules'
   >('payroll_sheet');
+
+  // Filter: Commission Staff Only by Default (ይህ ሲስተም የሚሰራው በፖሊስ ኮሚሽን ላሉት ነው)
+  const [commissionOnly, setCommissionOnly] = useState<boolean>(true);
+  const [tableStyle, setTableStyle] = useState<'yellow_official' | 'dark_modern'>('yellow_official');
 
   const [searchMember, setSearchMember] = useState('');
   const [selectedRankFilter, setSelectedRankFilter] = useState<string>('all');
   const [selectedMemberForPayslip, setSelectedMemberForPayslip] = useState<MemberProfile | null>(null);
   const [selectedMemberForAdjustment, setSelectedMemberForAdjustment] = useState<MemberProfile | null>(null);
+  const [selectedArchiveForView, setSelectedArchiveForView] = useState<MonthlyPayrollArchive | null>(null);
 
   // Notification States
   const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
   const [isNotifyingAll, setIsNotifyingAll] = useState(false);
   const [notifyingMemberId, setNotifyingMemberId] = useState<string | null>(null);
 
-  // Editable scales local state for tab 3
+  // Archive creation state
+  const [archiveMonthName, setArchiveMonthName] = useState('የመስከረም 2019 ዓ.ም (September 2026)');
+  const [archiveNotes, setArchiveNotes] = useState('በፋየርስቶር በፋይል የተመዘገበ ይፋዊ የኮሚሽኑ ወርሃዊ ደመወዝ');
+  const [isArchiving, setIsArchiving] = useState(false);
+
+  // Quick Adjustment Tab state
+  const [quickAdjId, setQuickAdjId] = useState('');
+  const [quickAdjField, setQuickAdjField] = useState<
+    'baseSalary' | 'ration' | 'duty' | 'hazard' | 'housing' | 'transport' | 'grade_step'
+  >('baseSalary');
+  const [quickAdjValue, setQuickAdjValue] = useState<number>(0);
+  const [quickAdjStep, setQuickAdjStep] = useState<number>(1);
+  const [quickAdjReason, setQuickAdjReason] = useState('');
+  const [quickAdjStatus, setQuickAdjStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Quick Institutional Deductions Tab state
+  const [dedAdjId, setDedAdjId] = useState('');
+  const [selamBiruhSavings, setSelamBiruhSavings] = useState<number>(0);
+  const [selamBiruhLotteryShare, setSelamBiruhLotteryShare] = useState<number>(0);
+  const [selamBiruhLoan, setSelamBiruhLoan] = useState<number>(0);
+  const [generalCreditLoan, setGeneralCreditLoan] = useState<number>(0);
+  const [personalLoan, setPersonalLoan] = useState<number>(0);
+  const [hivFund, setHivFund] = useState<number>(0);
+  const [medical, setMedical] = useState<number>(0);
+  const [otherDeduction, setOtherDeduction] = useState<number>(0);
+  const [dedAdjStatus, setDedAdjStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Editable scales local state for tab 4
   const [isEditingScale, setIsEditingScale] = useState(false);
   const [editableScales, setEditableScales] = useState<RankSalaryGradeScale[]>(salaryScales);
   const [scaleSaveStatus, setScaleSaveStatus] = useState<string | null>(null);
 
-  // Global deduction rules local state for tab 4
+  // Global deduction rules local state for tab 5
   const [localRules, setLocalRules] = useState<PayrollGlobalConfig>(payrollConfig);
   const [rulesSaveStatus, setRulesSaveStatus] = useState<string | null>(null);
 
-  // Eligible members for payroll (active duty and on leave)
-  const payrollMembers = members.filter(
-    m => m.status === 'active' || m.status === 'on_leave' || m.status === 'transferred_pending'
-  );
+  // Eligible members for payroll
+  const baseEligibleMembers = commissionOnly
+    ? commissionOnlyPayrollMembers
+    : members.filter(
+        m => m.status === 'active' || m.status === 'on_leave' || m.status === 'transferred_pending'
+      );
 
-  const filteredPayrollMembers = payrollMembers.filter(m => {
+  const filteredPayrollMembers = baseEligibleMembers.filter(m => {
     const q = searchMember.toLowerCase();
     const matchesSearch =
       !q ||
@@ -96,56 +152,217 @@ export const PayrollManager: React.FC = () => {
   });
 
   // Calculate live institutional totals using automated calculator
-  const computedList = payrollMembers.map(m =>
+  const computedList = baseEligibleMembers.map(m =>
     calculateOfficerPayroll(m, payrollConfig, memberPayrollCustomizations[m.policeId.toUpperCase()])
   );
 
   const totalBaseSalary = computedList.reduce((sum, item) => sum + item.baseSalary, 0);
   const totalRationAllowance = computedList.reduce((sum, item) => sum + (item.allowances.ration || 0), 0);
-  const totalAllowances = computedList.reduce((sum, item) => sum + item.allowances.totalAllowances, 0);
+  const totalGrossPensionPool = computedList.reduce(
+    (sum, item) => sum + Math.max(0, item.allowances.totalAllowances - (item.allowances.ration || 0)),
+    0
+  );
   const totalGross = computedList.reduce((sum, item) => sum + item.grossSalary, 0);
   const totalPensionEmployee = computedList.reduce((sum, item) => sum + item.deductions.pensionEmployee, 0);
-  const totalPensionEmployer = computedList.reduce((sum, item) => sum + item.deductions.pensionEmployer, 0);
   const totalIncomeTax = computedList.reduce((sum, item) => sum + item.deductions.incomeTax, 0);
-  const totalPersonalLoans = computedList.reduce((sum, item) => sum + (item.deductions.personalLoan || 0), 0);
-  const totalSelamBiruh = computedList.reduce(
-    (sum, item) =>
-      sum +
-      (item.deductions.selamBiruhSavings || 0) +
-      (item.deductions.selamBiruhLotteryShare || 0) +
-      (item.deductions.selamBiruhLoan || 0) +
-      (item.deductions.generalCreditLoan || 0),
-    0
-  );
-  const totalHivAndMedical = computedList.reduce(
-    (sum, item) => sum + (item.deductions.hivFund || 0) + (item.deductions.medical || 0) + (item.deductions.other || 0),
-    0
-  );
+
   const totalOtherDeductions = computedList.reduce((sum, item) => {
     return (
       sum +
-      item.deductions.creditAssociation +
-      item.deductions.personalLoan +
-      item.deductions.selamBiruhSavings +
-      item.deductions.selamBiruhLotteryShare +
-      item.deductions.selamBiruhLoan +
-      item.deductions.generalCreditLoan +
-      item.deductions.hivFund +
-      item.deductions.medical +
-      item.deductions.other +
-      item.deductions.redCross +
-      item.deductions.courtPenalty +
+      (item.deductions.creditAssociation || 0) +
+      (item.deductions.personalLoan || 0) +
+      (item.deductions.selamBiruhSavings || 0) +
+      (item.deductions.selamBiruhLotteryShare || 0) +
+      (item.deductions.selamBiruhLoan || 0) +
+      (item.deductions.generalCreditLoan || 0) +
+      (item.deductions.hivFund || 0) +
+      (item.deductions.medical || 0) +
+      (item.deductions.other || 0) +
+      (item.deductions.redCross || 0) +
+      (item.deductions.courtPenalty || 0) +
       item.deductions.customItems.reduce((acc, c) => acc + c.amount, 0)
     );
   }, 0);
-  const totalDeductions = computedList.reduce((sum, item) => sum + item.deductions.totalDeductions, 0);
+
+  const totalDeductions = totalIncomeTax + totalPensionEmployee + totalOtherDeductions;
   const totalNet = computedList.reduce((sum, item) => sum + item.netPay, 0);
+
+  // Autofill quick adjustment tool when member ID changes
+  const handleQuickAdjIdSearch = (id: string) => {
+    setQuickAdjId(id);
+    const m = getMemberByPoliceId(id);
+    if (m) {
+      const custom = memberPayrollCustomizations[m.policeId.toUpperCase()];
+      if (quickAdjField === 'baseSalary') {
+        setQuickAdjValue(custom?.customBaseSalary ?? m.baseSalary);
+      } else if (quickAdjField === 'ration') {
+        setQuickAdjValue(
+          custom?.monthlyAllowances?.ration ?? m.monthlyAllowances?.ration ?? payrollConfig.defaultRationAllowance ?? 1500
+        );
+      } else if (quickAdjField === 'grade_step') {
+        setQuickAdjValue(custom?.salaryGrade ?? m.salaryGrade ?? 1);
+        setQuickAdjStep(custom?.salaryStep ?? m.salaryStep ?? 1);
+      } else {
+        setQuickAdjValue(
+          (custom?.monthlyAllowances as any)?.[quickAdjField] ?? (m.monthlyAllowances as any)?.[quickAdjField] ?? 0
+        );
+      }
+    }
+  };
+
+  // Submit quick salary adjustment
+  const handleQuickAdjSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickAdjId.trim()) return;
+
+    const res = await quickAdjustSalaryByPoliceId(
+      quickAdjId,
+      quickAdjField,
+      quickAdjValue,
+      quickAdjField === 'grade_step' ? quickAdjStep : undefined,
+      quickAdjReason
+    );
+
+    if (res.success) {
+      setQuickAdjStatus({ type: 'success', text: res.message });
+      setNotificationStatus(res.message);
+      setTimeout(() => setQuickAdjStatus(null), 4000);
+    } else {
+      setQuickAdjStatus({ type: 'error', text: res.message });
+    }
+  };
+
+  // Autofill deductions tool when member ID changes
+  const handleDedIdSearch = (id: string) => {
+    setDedAdjId(id);
+    const m = getMemberByPoliceId(id);
+    if (m) {
+      const custom = memberPayrollCustomizations[m.policeId.toUpperCase()];
+      setSelamBiruhSavings(custom?.selamBiruhSavings || 0);
+      setSelamBiruhLotteryShare(custom?.selamBiruhLotteryShare || 0);
+      setSelamBiruhLoan(custom?.selamBiruhLoan || 0);
+      setGeneralCreditLoan(custom?.generalCreditLoan || 0);
+      setPersonalLoan(custom?.personalLoanDeduction || 0);
+      setHivFund(custom?.hivFundDeduction || 0);
+      setMedical(custom?.medicalDeduction || custom?.healthInsuranceDeduction || 100);
+      setOtherDeduction(custom?.otherDeductions || 0);
+    }
+  };
+
+  // Submit quick deductions
+  const handleDedAdjSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dedAdjId.trim()) return;
+
+    const res = await quickAdjustDeductionsByPoliceId(dedAdjId, {
+      selamBiruhSavings,
+      selamBiruhLotteryShare,
+      selamBiruhLoan,
+      generalCreditLoan,
+      personalLoanDeduction: personalLoan,
+      hivFundDeduction: hivFund,
+      medicalDeduction: medical,
+      otherDeductions: otherDeduction
+    });
+
+    if (res.success) {
+      setDedAdjStatus({ type: 'success', text: res.message });
+      setNotificationStatus(res.message);
+      setTimeout(() => setDedAdjStatus(null), 4000);
+    } else {
+      setDedAdjStatus({ type: 'error', text: res.message });
+    }
+  };
+
+  // Save current month to archive in Firestore
+  const handleArchiveCurrentMonth = async () => {
+    if (!archiveMonthName.trim()) return;
+    setIsArchiving(true);
+    const res = await saveCurrentMonthlyPayrollArchive(archiveMonthName, archiveNotes);
+    setIsArchiving(false);
+    setNotificationStatus(res.message);
+  };
+
+  // Export 13-columns CSV matching the user's uploaded image exactly
+  const handleExportPayrollCsv = () => {
+    const headers = [
+      'id number',
+      'ማዕረግ',
+      'N AME',
+      'GROSS',
+      'NO.TAX',
+      'Gross PENSION',
+      'Total SALARY',
+      'TAX',
+      'PENSION',
+      'other didaction',
+      'Total DIDACTION',
+      'Net PAY',
+      'SIG.'
+    ];
+
+    const rows = computedList.map(item => {
+      const gross = item.baseSalary;
+      const noTax = item.allowances.ration || 0;
+      const nonRation = Math.max(0, item.allowances.totalAllowances - noTax);
+      const grossPension = nonRation;
+      const totalSalary = gross + noTax + grossPension;
+      const tax = item.deductions.incomeTax;
+      const pension = item.deductions.pensionEmployee;
+      const other =
+        (item.deductions.creditAssociation || 0) +
+        (item.deductions.personalLoan || 0) +
+        (item.deductions.selamBiruhSavings || 0) +
+        (item.deductions.selamBiruhLotteryShare || 0) +
+        (item.deductions.selamBiruhLoan || 0) +
+        (item.deductions.generalCreditLoan || 0) +
+        (item.deductions.hivFund || 0) +
+        (item.deductions.medical || 0) +
+        (item.deductions.other || 0) +
+        (item.deductions.redCross || 0) +
+        (item.deductions.courtPenalty || 0) +
+        item.deductions.customItems.reduce((acc, c) => acc + c.amount, 0);
+
+      const totalDeduction = tax + pension + other;
+      const netPay = totalSalary - totalDeduction;
+
+      return [
+        `"${item.policeId}"`,
+        `"${item.rank}"`,
+        `"${item.fullName}"`,
+        gross,
+        noTax,
+        grossPension,
+        totalSalary,
+        tax,
+        pension,
+        other,
+        totalDeduction,
+        netPay,
+        '""'
+      ];
+    });
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,\uFEFF' +
+      [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute(
+      'download',
+      `BG_Police_Commission_Official_Payroll_${new Date().toISOString().substring(0, 10)}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleNotifyAll = async () => {
     setIsNotifyingAll(true);
     setNotificationStatus(null);
     try {
-      const res = await notifyAllMembersPayrollReady('የመስከረም 2026');
+      const res = await notifyAllMembersPayrollReady('የመስከረም 2019/2026');
       setNotificationStatus(res.message);
       setTimeout(() => setNotificationStatus(null), 5000);
     } catch (err: any) {
@@ -158,7 +375,7 @@ export const PayrollManager: React.FC = () => {
   const handleNotifySingleMember = async (policeId: string) => {
     setNotifyingMemberId(policeId);
     try {
-      const res = await sendPayslipReadyNotification(policeId, 'የመስከረም 2026');
+      const res = await sendPayslipReadyNotification(policeId, 'የመስከረም 2019/2026');
       setNotificationStatus(res.message);
       setTimeout(() => setNotificationStatus(null), 4000);
     } catch (err: any) {
@@ -166,64 +383,6 @@ export const PayrollManager: React.FC = () => {
     } finally {
       setNotifyingMemberId(null);
     }
-  };
-
-  const handleExportPayrollCsv = () => {
-    const headers = [
-      'Police ID',
-      'Officer Name',
-      'Rank',
-      'Department',
-      'Grade',
-      'Step',
-      'Base Salary ETB',
-      'Total Allowances ETB',
-      'Gross Pay ETB',
-      'Pension Deduction (7%)',
-      'Income Tax ETB',
-      'Other Deductions ETB',
-      'Total Deductions ETB',
-      'Net Pay ETB'
-    ];
-
-    const rows = computedList.map(item => {
-      const other =
-        item.deductions.creditAssociation +
-        item.deductions.healthInsurance +
-        item.deductions.redCross +
-        item.deductions.courtPenalty;
-
-      return [
-        `"${item.policeId}"`,
-        `"${item.fullName}"`,
-        `"${item.rank}"`,
-        `"${item.department}"`,
-        item.grade,
-        item.step,
-        item.baseSalary,
-        item.allowances.totalAllowances,
-        item.grossSalary,
-        item.deductions.pensionEmployee,
-        item.deductions.incomeTax,
-        other,
-        item.deductions.totalDeductions,
-        item.netPay
-      ];
-    });
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute(
-      'download',
-      `Begu_Police_Official_Payroll_Sheet_${new Date().toISOString().substring(0, 10)}.csv`
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // Handle scale step change in edit mode
@@ -279,54 +438,143 @@ export const PayrollManager: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Banner with Firestore Status */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs font-bold text-amber-400 bg-amber-400/10 px-2.5 py-0.5 rounded border border-amber-400/20 uppercase tracking-wider">
-              {t('የደመወዝና ጥቅማጥቅም አስተዳደር ማዕከል', 'Automated Payroll & Compensation Engine')}
+            <span className="font-mono text-xs font-bold text-amber-400 bg-amber-400/10 px-2.5 py-0.5 rounded-lg border border-amber-400/20 uppercase tracking-wider">
+              {t('የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሚሽን ፔሮል', 'Commission Payroll Engine')}
             </span>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
               <Cloud className="w-3 h-3" />
-              <span>{t('በፋየርስቶር የተገናኘ (Cloud Synced)', 'Firestore Cloud Connected')}</span>
+              <span>{t('በፋየርስቶር በቀጥታ የሚቀመጥ (Cloud Synced)', 'Firestore Cloud Synced')}</span>
             </span>
+            {commissionOnly ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
+                <Building className="w-3 h-3" />
+                <span>{t('የፖሊስ ኮሚሽን አባላት ብቻ (ኮሚሽን ፔሮል)', 'Commission Staff Only')}</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-300 bg-blue-500/15 border border-blue-500/30 px-2.5 py-0.5 rounded-full">
+                <Users className="w-3 h-3" />
+                <span>{t('ሁሉም የክልሉ ፖሊስ አባላት', 'All Regional Police Force')}</span>
+              </span>
+            )}
           </div>
 
           <h2 className="text-xl sm:text-2xl font-black text-white mt-1.5 tracking-tight">
-            {t('የቤኒሻንጉል ጉሙዝ ፖሊስ አባላት የደመወዝ ማስተካከያና ስሌት', 'Police Force Salary Adjustment & Live Payroll')}
+            {t('የቤኒሻንጉል ጉሙዝ ክልል ፖሊስ ኮሚሽን የወር ደመወዝና ጥቅማጥቅም ፔሮል', 'Benishangul Gumuz Police Commission Monthly Payroll')}
           </h2>
-          <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-3xl">
+          <p className="text-xs text-slate-300 mt-1 max-w-3xl">
             {t(
-              'የደመወዝ መጠን፣ አበሎች፣ የጡረታና ግብር ቅነሳዎች አንዴ በባለሙያ ተዋቅረው በሲስተሙ በራስ-ሰር የሚሰሉበት እና በማዕረግ ደረጃ የሚቀመጥበት የክላውድ ስርዓት።',
-              'HR specialist salary scale input, dynamic deductions engine, automated live net pay calculation, and real-time Firestore persistence.'
+              'በኮሚሽኑ ለተመደቡ አባላት ወርሃዊ ደመወዝ፣ የቀለብ ብር፣ ተቋማዊ ቅነሳዎችና ግብር በህጉ መሰረት ተሰልተው በወር በፋይል የሚቀመጡበት ስርዓት።',
+              'Official commission payroll calculation, tax & statutory deductions, ration allowances, and monthly historical archiving.'
             )}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Commission vs All Regional Force Switch */}
+          <button
+            onClick={() => setCommissionOnly(!commissionOnly)}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border shadow ${
+              commissionOnly
+                ? 'bg-amber-500 text-slate-950 border-amber-400 font-black'
+                : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700'
+            }`}
+            title={t('የኮሚሽኑን ብቻ ወይም ሁሉንም የክልሉን ፖሊሶች ለማየት', 'Filter Commission Staff vs All Force')}
+          >
+            <Building className="w-4 h-4" />
+            <span>
+              {commissionOnly
+                ? t('🏢 የኮሚሽኑ ብቻ (አሁን የነቃ)', 'Commission Only')
+                : t('🌐 የክልሉ በሙሉ', 'All Regional')}
+            </span>
+          </button>
+
+          {/* Quick Archive Current Month Action */}
+          <button
+            onClick={handleArchiveCurrentMonth}
+            disabled={isArchiving}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition-all active:scale-95 disabled:opacity-50"
+            title={t('የዚህን ወር ደመወዝ በማህደር በፋየርስቶር መዝግብና ፋይል አድርግ', 'Archive this month to Firestore')}
+          >
+            <Save className={`w-4 h-4 ${isArchiving ? 'animate-spin' : ''}`} />
+            <span>{isArchiving ? t('በማህደር ላይ...', 'Archiving...') : t('የዚህን ወር ደመወዝ በፋይል መዝግብ', 'Archive Month')}</span>
+          </button>
+
           {/* Automatic Notification to All Members */}
           <button
             onClick={handleNotifyAll}
             disabled={isNotifyingAll}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center gap-2 transition-all shadow-md active:scale-95 disabled:opacity-50"
-            title={t('ለአባላት በሙሉ ወርሃዊ የደመወዝ ስሊፕ ዝግጁ መሆኑን ማሳወቂያ ላክ', 'Alert all members automatically that monthly salary slip is ready')}
+            className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all border border-amber-500/30 active:scale-95 disabled:opacity-50"
+            title={t('ለአባላት በሙሉ ወርሃዊ የደመወዝ ስሊፕ ዝግጁ መሆኑን ማሳወቂያ ላክ', 'Alert all members automatically')}
           >
             <Bell className={`w-4 h-4 ${isNotifyingAll ? 'animate-bounce' : ''}`} />
             <span>
-              {isNotifyingAll
-                ? t('ማሳወቂያ በመላክ ላይ...', 'Sending Alerts...')
-                : t('ለአባላት በሙሉ የስሊፕ ማሳወቂያ ላክ', 'Auto-Notify All Officers (Slip Ready)')}
+              {isNotifyingAll ? t('በመላክ ላይ...', 'Sending...') : t('ስሊፕ አሳውቅ', 'Notify Officers')}
             </span>
           </button>
 
           <button
             onClick={handleExportPayrollCsv}
-            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-2 transition-colors shadow"
+            className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors shadow"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>{t('የወር ፔይሮል Excel አውርድ', 'Export Payroll Sheet')}</span>
+            <span>{t('Excel / CSV አውርድ', 'Export CSV')}</span>
           </button>
         </div>
       </div>
+
+      {/* Promotion & Step Increment Due Banner Alerts */}
+      {(eligibleStepIncrementMembers.length > 0 || eligibleRankPromotionMembers.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {eligibleStepIncrementMembers.length > 0 && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-300">
+                    {t('እርከን የሚያገኙ አባላት (Step Increment Due)', 'Step Increment Due')}
+                  </h4>
+                  <p className="text-[11px] text-slate-300">
+                    {eligibleStepIncrementMembers.length} {t('አባላት የእርከን ማግኛ ጊዜያቸው ደርሷል', 'officers are eligible for salary step increment')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-lg">
+                  {eligibleStepIncrementMembers.length}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {eligibleRankPromotionMembers.length > 0 && (
+            <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-2xl flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-300">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-blue-300">
+                    {t('ማዕረግ የሚያገኙ አባላት (Rank Promotion Due)', 'Rank Promotion Due')}
+                  </h4>
+                  <p className="text-[11px] text-slate-300">
+                    {eligibleRankPromotionMembers.length} {t('አባላት የማዕረግ እድገት ማግኛ ጊዜያቸው ደርሷል', 'officers reached minimum tenure for next rank')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-black bg-blue-500 text-white px-2 py-0.5 rounded-lg">
+                  {eligibleRankPromotionMembers.length}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Notification Feedback Banner */}
       {notificationStatus && (
@@ -345,20 +593,20 @@ export const PayrollManager: React.FC = () => {
       )}
 
       {/* Aggregate Financial Highlights KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
           <span className="text-[11px] font-semibold text-slate-400 uppercase block">
-            {t('ተከፋይ አባላት', 'Paid Officers')}
+            {commissionOnly ? t('የኮሚሽኑ ተከፋዮች', 'Commission Staff') : t('ጠቅላላ ተከፋዮች', 'Total Officers')}
           </span>
-          <div className="text-2xl font-black text-white font-mono mt-1">{payrollMembers.length}</div>
+          <div className="text-2xl font-black text-white font-mono mt-1">{baseEligibleMembers.length}</div>
           <span className="text-[10px] text-emerald-400 mt-1 block">
-            {t('በስራና ፈቃድ ላይ ያሉ', 'Active force members')}
+            {commissionOnly ? t('በኮሚሽኑ ዋና መ/ቤት', 'At Commission HQ') : t('በክልሉ በሙሉ', 'Regional Force')}
           </span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
           <span className="text-[11px] font-semibold text-slate-400 uppercase block">
-            {t('መሰረታዊ ደመወዝ', 'Total Base Salary')}
+            {t('መሰረታዊ (GROSS)', 'Total Gross Base')}
           </span>
           <div className="text-lg font-black text-white font-mono mt-1">
             {totalBaseSalary.toLocaleString()}
@@ -366,33 +614,31 @@ export const PayrollManager: React.FC = () => {
           <span className="text-[10px] text-slate-400 mt-1 block">ETB</span>
         </div>
 
-        <div className="bg-slate-900 border border-amber-500/30 bg-amber-500/5 p-4 rounded-xl">
+        <div className="bg-slate-900 border border-amber-500/30 bg-amber-500/5 p-4 rounded-2xl">
           <span className="text-[11px] font-semibold text-amber-300 uppercase block">
-            ⭐ {t('የቀለብ ብር ድምር', 'Ration Allowance')}
+            ⭐ {t('የቀለብ ብር (NO.TAX)', 'Ration (No Tax)')}
           </span>
           <div className="text-lg font-black text-amber-400 font-mono mt-1">
             +{totalRationAllowance.toLocaleString()}
           </div>
           <span className="text-[10px] text-amber-400/80 mt-1 block">
-            {t('የምግብ/ቀለብ አበል', 'Food ration pool')}
+            {t('ከግብር ነፃ አበል', 'Tax-free allowance')}
           </span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
           <span className="text-[11px] font-semibold text-slate-400 uppercase block">
-            {t('ጠቅላላ አበሎች', 'Total Allowances')}
+            {t('ጥቅማጥቅም (Gross PENSION)', 'Gross Pension Pool')}
           </span>
-          <div className="text-lg font-black text-amber-400 font-mono mt-1">
-            +{totalAllowances.toLocaleString()}
+          <div className="text-lg font-black text-slate-200 font-mono mt-1">
+            +{totalGrossPensionPool.toLocaleString()}
           </div>
-          <span className="text-[10px] text-slate-400 mt-1 block">
-            {t('ቀለብ፣ ስምሪት፣ ሜዳ', 'Ration, duty, hazard')}
-          </span>
+          <span className="text-[10px] text-slate-400 mt-1 block">ETB</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
           <span className="text-[11px] font-semibold text-slate-400 uppercase block">
-            {t('ጠቅላላ ወጪ (Gross)', 'Total Gross Pay')}
+            {t('ጠቅላላ (Total SALARY)', 'Total Salary')}
           </span>
           <div className="text-lg font-black text-white font-mono mt-1">
             {totalGross.toLocaleString()}
@@ -400,354 +646,678 @@ export const PayrollManager: React.FC = () => {
           <span className="text-[10px] text-slate-400 mt-1 block">ETB</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
           <span className="text-[11px] font-semibold text-slate-400 uppercase block">
-            {t('ጠቅላላ ቅነሳዎች', 'Total Deductions')}
+            {t('ጠቅላላ ቅነሳ (Total DIDACTION)', 'Total Deductions')}
           </span>
           <div className="text-lg font-black text-rose-400 font-mono mt-1">
             -{totalDeductions.toLocaleString()}
           </div>
           <span className="text-[10px] text-slate-400 mt-1 block">
-            {t('ጡረታ፣ ግብር፣ ብድር', 'Pension, tax, loans')}
+            {t('ግብር + ጡረታ + ሌሎች', 'Tax + Pension + Other')}
           </span>
         </div>
 
-        <div className="bg-slate-900 border border-emerald-500/30 bg-emerald-500/5 p-4 rounded-xl col-span-2 sm:col-span-1">
+        <div className="bg-slate-900 border border-emerald-500/30 bg-emerald-500/5 p-4 rounded-2xl col-span-2 sm:col-span-1">
           <span className="text-[11px] font-semibold text-emerald-400 uppercase block">
-            {t('የተጣራ ክፍያ (Net Pay)', 'Total Net Payout')}
+            {t('የተጣራ (Net PAY)', 'Total Net Pay')}
           </span>
           <div className="text-xl font-black text-emerald-400 font-mono mt-1">
             {totalNet.toLocaleString()}
           </div>
           <span className="text-[10px] text-slate-400 mt-1 block">
-            {t('በቀጥታ ለአባላት ተከፋይ', 'Net take-home pay')}
+            {t('ለአባላት በቀጥታ ተከፋይ', 'Net Take-Home')}
           </span>
         </div>
       </div>
 
       {/* Tabs Navigation Switcher */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-1.5 flex flex-wrap gap-1 max-w-4xl">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-1.5 flex flex-wrap gap-1">
         <button
           onClick={() => setActiveTab('payroll_sheet')}
-          className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'payroll_sheet'
-              ? 'bg-amber-500 text-slate-950 shadow-md'
+              ? 'bg-amber-500 text-slate-950 shadow-md font-black'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
           }`}
         >
           <Banknote className="w-3.5 h-3.5" />
-          <span>{t('1. የወር ደመወዝ ሉህና አጠቃላይ ስሌት', '1. Live Monthly Payroll')}</span>
+          <span>{t('1. የወር ደመወዝ ሉህ (ሰንጠረዥ)', '1. Payroll Sheet')}</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('officer_calculator')}
-          className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === 'officer_calculator'
-              ? 'bg-amber-500 text-slate-950 shadow-md'
+          onClick={() => setActiveTab('payroll_history')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            activeTab === 'payroll_history'
+              ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>
+            {t('2. የወር ደመወዝ ማህደርና ፋይሎች', '2. Monthly Payroll Archives')}
+            {monthlyPayrollArchives.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950 text-amber-300">
+                {monthlyPayrollArchives.length}
+              </span>
+            )}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('quick_adjust')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            activeTab === 'quick_adjust'
+              ? 'bg-amber-500 text-slate-950 shadow-md font-black'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
           }`}
         >
           <Calculator className="w-3.5 h-3.5" />
-          <span>{t('2. የአባላት ደመወዝ ማስተካከያና ስሌት', '2. Officer Salary Calculator')}</span>
+          <span>{t('3. ፈጣን ደመወዝ ማስተካከያ በID', '3. Quick Adjustment by ID')}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('scale_matrix')}
-          className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'scale_matrix'
-              ? 'bg-amber-500 text-slate-950 shadow-md'
+              ? 'bg-amber-500 text-slate-950 shadow-md font-black'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          <span>{t('3. የደመወዝ ስኬል በደረጃና በማዕረግ', '3. Rank & Grade Scales')}</span>
+          <span>{t('4. የደመወዝ ስኬል ማትሪክስ', '4. Scale Matrix')}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('deduction_rules')}
-          className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'deduction_rules'
-              ? 'bg-amber-500 text-slate-950 shadow-md'
+              ? 'bg-amber-500 text-slate-950 shadow-md font-black'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
           }`}
         >
           <Settings className="w-3.5 h-3.5" />
-          <span>{t('4. የቅነሳዎችና ግብር ህግጋት ማዋቀሪያ', '4. Deductions & Tax Rules')}</span>
+          <span>{t('5. ተቋማዊ ቅነሳዎችና ግብር በID', '5. Deductions & Tax by ID')}</span>
         </button>
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: PAYROLL SHEET */}
+      {/* TAB 1: PAYROLL SHEET WITH THE EXACT 13 COLUMNS FROM USER'S IMAGE */}
       {/* ========================================================================= */}
       {activeTab === 'payroll_sheet' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm space-y-4 p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-sm space-y-4 p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Banknote className="w-4 h-4 text-emerald-400" />
-                <span>{t('የቤጉ ፖሊስ አባላት የወር ክፍያ ዝርዝር ሰነድ', 'Force Member Compensation Roster')}</span>
+                <span>
+                  {commissionOnly
+                    ? t('የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሚሽን ወርሃዊ የደመወዝ ሰነድ (ኮሚሽን ፔሮል)', 'Police Commission Official Payroll Roster')
+                    : t('የቤኒሻንጉል ጉሙዝ ፖሊስ አባላት ጠቅላላ የወር ክፍያ ሰነድ', 'Force-Wide Compensation Roster')}
+                </span>
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {t('ደመወዝ፣ አበሎች፣ ግብርና ጡረታ በሲስተሙ በራስ-ሰር ተሰልተው የተቀመጡ', 'Automated net salary calculations and tax withholding')}
+                {t(
+                  'ከዚህ በታች ያለው ሰንጠረዥ በሰጡት ኦፊሴላዊ ፎርማት መሰረት ወደ ጎን የተደረደሩ 13 ዓምዶችን ይዟል።',
+                  '13 official columns rendered exactly matching the Commission payroll standard.'
+                )}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {/* Table Style Switcher */}
+              <button
+                onClick={() => setTableStyle(tableStyle === 'yellow_official' ? 'dark_modern' : 'yellow_official')}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-950 border border-slate-700 text-amber-300 hover:text-white flex items-center gap-1 transition-colors"
+                title={t('የሰንጠረዥ ቀለም ገፅታ ቀይር', 'Toggle Yellow Spreadsheet vs Dark Theme')}
+              >
+                <span>{tableStyle === 'yellow_official' ? '💛 ቢጫ ኦፊሴላዊ' : '🌙 ዳርክ ሞድ'}</span>
+              </button>
+
               <select
                 value={selectedRankFilter}
                 onChange={e => setSelectedRankFilter(e.target.value)}
                 className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
               >
                 <option value="all">{t('ሁሉም ማዕረጎች', 'All Ranks')}</option>
-                {Array.from(new Set(payrollMembers.map(m => m.currentRank))).map(rank => (
+                {Array.from(new Set(baseEligibleMembers.map(m => m.currentRank))).map(rank => (
                   <option key={rank} value={rank}>
                     {rank}
                   </option>
                 ))}
               </select>
 
-              <div className="relative w-full sm:w-64">
+              <div className="relative w-full sm:w-56">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                 <input
                   type="text"
                   value={searchMember}
                   onChange={e => setSearchMember(e.target.value)}
-                  placeholder={t('አባል ፈልግ (ስም፣ ቁጥር፣ ክፍል)...', 'Search officer...')}
+                  placeholder={t('አባል ፈልግ (ስም፣ ID)...', 'Search officer...')}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950/80 text-slate-400 uppercase font-mono text-[11px] border-b border-slate-800">
-                <tr>
-                  <th className="py-3 px-3">Police ID</th>
-                  <th className="py-3 px-3">{t('የአባሉ ስም', 'Name')}</th>
-                  <th className="py-3 px-3">{t('ማዕረግ', 'Rank')}</th>
-                  <th className="py-3 px-3">{t('ደረጃ/እርከን', 'Scale')}</th>
-                  <th className="py-3 px-3 text-right">{t('መሰረታዊ ደመወዝ', 'Base')}</th>
-                  <th className="py-3 px-3 text-right text-amber-300">⭐ {t('የቀለብ ብር', 'Ration')}</th>
-                  <th className="py-3 px-3 text-right">{t('ሌሎች አበሎች', 'Other Allowances')}</th>
-                  <th className="py-3 px-3 text-right font-bold text-white">{t('ጠቅላላ (Gross)', 'Gross')}</th>
-                  <th className="py-3 px-3 text-right">{t('ጡረታ (7%)', 'Pension')}</th>
-                  <th className="py-3 px-3 text-right">{t('ግብር', 'Tax')}</th>
-                  <th className="py-3 px-3 text-right text-rose-300">{t('ከግል ብድር', 'Personal Loan')}</th>
-                  <th className="py-3 px-3 text-right text-sky-300">{t('ሰላም ብሩህ', 'Selam Biruh')}</th>
-                  <th className="py-3 px-3 text-right text-emerald-300">{t('ኤችአይቪና ሌሎች', 'HIV/Other')}</th>
-                  <th className="py-3 px-3 text-right font-bold text-rose-400">{t('ጠቅላላ ቅነሳ', 'Deductions')}</th>
-                  <th className="py-3 px-3 text-right font-bold text-emerald-400">{t('የተጣራ (Net Pay)', 'Net Pay')}</th>
-                  <th className="py-3 px-3 text-center">{t('ድርጊቶች', 'Actions')}</th>
+          {/* THE EXACT 13 COLUMNS TABLE AS IN USER'S UPLOADED IMAGE */}
+          <div className="overflow-x-auto border-2 border-black rounded-xl shadow-lg">
+            <table className="w-full text-left text-xs border-collapse min-w-[1280px]">
+              {/* Exact Headers in order: id number | ማዕረግ | N AME | GROSS | NO.TAX | Gross PENSION | Total SALARY | TAX | PENSION | other didaction | Total DIDACTION | Net PAY | SIG. */}
+              <thead>
+                <tr
+                  className={
+                    tableStyle === 'yellow_official'
+                      ? 'bg-[#ffff00] text-black font-black uppercase text-center border-b-2 border-black divide-x-2 divide-black text-[11px]'
+                      : 'bg-slate-950 text-slate-300 font-bold uppercase text-center border-b border-slate-800 divide-x divide-slate-800 text-[11px]'
+                  }
+                >
+                  <th className="py-3 px-2 whitespace-nowrap">id number</th>
+                  <th className="py-3 px-2 whitespace-nowrap">ማዕረግ</th>
+                  <th className="py-3 px-3 text-left whitespace-nowrap">N AME</th>
+                  <th className="py-3 px-2 text-right whitespace-nowrap">GROSS</th>
+                  <th className="py-3 px-2 text-right whitespace-nowrap">NO.TAX</th>
+                  <th className="py-3 px-2 text-right whitespace-nowrap">Gross PENSION</th>
+                  <th className="py-3 px-2 text-right whitespace-nowrap">Total SALARY</th>
+                  <th className="py-3 px-2 text-right whitespace-nowrap">TAX</th>
+                  <th className="py-3 px-2 text-right whitespace-nowrap">PENSION</th>
+                  <th className="py-3 px-2 text-right whitespace-nowrap">other didaction</th>
+                  <th className="py-3 px-2 text-right whitespace-nowrap">Total DIDACTION</th>
+                  <th className="py-3 px-2 text-right whitespace-nowrap">Net PAY</th>
+                  <th className="py-3 px-3 text-center whitespace-nowrap">SIG.</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-black/30 bg-slate-950/90 text-slate-200">
                 {filteredPayrollMembers.map(m => {
                   const calc = calculateOfficerPayroll(
                     m,
                     payrollConfig,
                     memberPayrollCustomizations[m.policeId.toUpperCase()]
                   );
-                  const nonRationAllowances = Math.max(0, calc.allowances.totalAllowances - (calc.allowances.ration || 0));
-                  const selamBiruhTotal =
+
+                  const gross = calc.baseSalary;
+                  const noTax = calc.allowances.ration || 0;
+                  const nonRation = Math.max(0, calc.allowances.totalAllowances - noTax);
+                  const grossPension = nonRation;
+                  const totalSalary = gross + noTax + grossPension;
+
+                  const tax = calc.deductions.incomeTax;
+                  const pension = calc.deductions.pensionEmployee;
+                  const other =
+                    (calc.deductions.creditAssociation || 0) +
+                    (calc.deductions.personalLoan || 0) +
                     (calc.deductions.selamBiruhSavings || 0) +
                     (calc.deductions.selamBiruhLotteryShare || 0) +
                     (calc.deductions.selamBiruhLoan || 0) +
-                    (calc.deductions.generalCreditLoan || 0);
-                  const hivAndOtherTotal =
+                    (calc.deductions.generalCreditLoan || 0) +
                     (calc.deductions.hivFund || 0) +
                     (calc.deductions.medical || 0) +
                     (calc.deductions.other || 0) +
                     (calc.deductions.redCross || 0) +
                     (calc.deductions.courtPenalty || 0) +
-                    calc.deductions.customItems.reduce((sum, item) => sum + item.amount, 0);
+                    calc.deductions.customItems.reduce((acc, c) => acc + c.amount, 0);
+
+                  const totalDeductionsCalc = tax + pension + other;
+                  const netPay = totalSalary - totalDeductionsCalc;
+                  const isCommission = isCommissionOfficer(m);
 
                   return (
-                    <tr key={m.policeId} className="hover:bg-slate-800/50 transition-colors">
-                      <td className="py-2.5 px-3 font-mono font-bold text-amber-400">{m.policeId}</td>
-                      <td className="py-2.5 px-3">
+                    <tr
+                      key={m.policeId}
+                      className="hover:bg-slate-800/60 transition-colors divide-x divide-black/20 border-b border-black/20"
+                    >
+                      {/* 1. id number */}
+                      <td className="py-2 px-2 text-center font-mono font-bold text-amber-400 whitespace-nowrap">
+                        <button
+                          onClick={() => setSelectedMemberForAdjustment(m)}
+                          className="hover:underline flex items-center justify-center gap-1 mx-auto"
+                          title={t('ለዚህ አባል ደመወዝ/ቅነሳዎችን አስተካክል', 'Adjust officer salary')}
+                        >
+                          <span>{m.policeId}</span>
+                        </button>
+                      </td>
+
+                      {/* 2. ማዕረግ */}
+                      <td className="py-2 px-2 text-center text-slate-300 whitespace-nowrap font-medium">
+                        {m.currentRank}
+                      </td>
+
+                      {/* 3. N AME */}
+                      <td className="py-2 px-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <img
                             src={m.identity.photoUrl}
                             alt=""
-                            className="w-7 h-7 rounded-full object-cover border border-slate-700 flex-shrink-0"
+                            className="w-6 h-6 rounded-full object-cover border border-slate-700 flex-shrink-0"
                           />
                           <div>
                             <span className="font-semibold text-white block">{m.identity.fullName}</span>
-                            <span className="text-[10px] text-slate-400">{m.currentDepartment}</span>
+                            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                              {isCommission ? (
+                                <span className="text-amber-400">🏛️ ኮሚሽን</span>
+                              ) : (
+                                <span className="text-slate-500">📍 ዞን/ወረዳ</span>
+                              )}
+                              <span>· G{calc.grade}/S{calc.step}</span>
+                            </span>
                           </div>
                         </div>
                       </td>
-                      <td className="py-2.5 px-3 text-slate-300">{m.currentRank}</td>
-                      <td className="py-2.5 px-3 font-mono text-slate-400">
-                        G{calc.grade} · S{calc.step}
+
+                      {/* 4. GROSS */}
+                      <td className="py-2 px-2 text-right font-mono font-semibold text-white whitespace-nowrap">
+                        {gross.toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-white">
-                        {calc.baseSalary.toLocaleString()}
+
+                      {/* 5. NO.TAX */}
+                      <td className="py-2 px-2 text-right font-mono font-bold text-amber-300 whitespace-nowrap">
+                        {noTax > 0 ? `+${noTax.toLocaleString()}` : '0'}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-300">
-                        +{calc.allowances.ration.toLocaleString()}
+
+                      {/* 6. Gross PENSION */}
+                      <td className="py-2 px-2 text-right font-mono text-slate-300 whitespace-nowrap">
+                        {grossPension > 0 ? `+${grossPension.toLocaleString()}` : '0'}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-300">
-                        +{nonRationAllowances.toLocaleString()}
+
+                      {/* 7. Total SALARY */}
+                      <td className="py-2 px-2 text-right font-mono font-black text-white whitespace-nowrap bg-slate-900/50">
+                        {totalSalary.toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-white">
-                        {calc.grossSalary.toLocaleString()}
+
+                      {/* 8. TAX */}
+                      <td className="py-2 px-2 text-right font-mono text-rose-400 whitespace-nowrap">
+                        -{tax.toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-rose-400">
-                        -{calc.deductions.pensionEmployee.toLocaleString()}
+
+                      {/* 9. PENSION */}
+                      <td className="py-2 px-2 text-right font-mono text-rose-400 whitespace-nowrap">
+                        -{pension.toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-rose-400">
-                        -{calc.deductions.incomeTax.toLocaleString()}
+
+                      {/* 10. other didaction */}
+                      <td className="py-2 px-2 text-right font-mono text-sky-300 whitespace-nowrap">
+                        <button
+                          onClick={() => setSelectedMemberForAdjustment(m)}
+                          className="hover:underline"
+                          title={t('ዝርዝር ቅነሳዎችን ለመመልከት/ለማረም ጠቅ ያድርጉ', 'Click to view/edit itemized deductions')}
+                        >
+                          -{other.toLocaleString()}
+                        </button>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-rose-300">
-                        {calc.deductions.personalLoan > 0 ? `-${calc.deductions.personalLoan.toLocaleString()}` : '-'}
+
+                      {/* 11. Total DIDACTION */}
+                      <td className="py-2 px-2 text-right font-mono font-bold text-rose-400 whitespace-nowrap bg-rose-500/10">
+                        -{totalDeductionsCalc.toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-sky-300">
-                        {selamBiruhTotal > 0 ? `-${selamBiruhTotal.toLocaleString()}` : '-'}
+
+                      {/* 12. Net PAY */}
+                      <td className="py-2 px-2 text-right font-mono font-black text-emerald-400 whitespace-nowrap bg-emerald-500/10 text-sm">
+                        {netPay.toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-emerald-300">
-                        {hivAndOtherTotal > 0 ? `-${hivAndOtherTotal.toLocaleString()}` : '-'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-400">
-                        -{calc.deductions.totalDeductions.toLocaleString()}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-400">
-                        {calc.netPay.toLocaleString()}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
+
+                      {/* 13. SIG. */}
+                      <td className="py-2 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
-                            onClick={() => setSelectedMemberForAdjustment(m)}
-                            className="px-2.5 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors"
-                            title={t('ደመወዝና ቅነሳዎችን አስተካክል', 'Adjust Salary & Deductions')}
-                          >
-                            <Sliders className="w-3 h-3 text-amber-400" />
-                            <span>{t('አስተካክል', 'Adjust')}</span>
-                          </button>
-
-                          <button
                             onClick={() => setSelectedMemberForPayslip(m)}
-                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors"
-                            title={t('ፔይስሊፕ አሳይ', 'View Payslip')}
+                            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-amber-400 transition-colors"
+                            title={t('የደመወዝ ስሊፕ አሳይ', 'View Payslip')}
                           >
-                            <Eye className="w-3 h-3 text-slate-400" />
-                            <span>{t('ስሊፕ', 'Slip')}</span>
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
-
                           <button
                             onClick={() => handleNotifySingleMember(m.policeId)}
                             disabled={notifyingMemberId === m.policeId}
-                            className="px-2 py-1 rounded bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 hover:text-sky-200 border border-sky-500/30 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors disabled:opacity-50"
-                            title={t('የስሊፕ ዝግጁነት ማሳወቂያ ለአባሉ ላክ', 'Send slip ready alert to this officer')}
+                            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-emerald-400 transition-colors"
+                            title={t('ለአባሉ ስሊፕ ዝግጁ መሆኑን አሳውቅ', 'Notify member payslip ready')}
                           >
-                            <Bell className={`w-3 h-3 ${notifyingMemberId === m.policeId ? 'animate-spin' : ''}`} />
-                            <span>{notifyingMemberId === m.policeId ? '...' : t('ማሳወቂያ', 'Alert')}</span>
+                            <Bell className={`w-3.5 h-3.5 ${notifyingMemberId === m.policeId ? 'animate-spin' : ''}`} />
                           </button>
+                          <div className="w-12 border-b border-dashed border-slate-600 inline-block h-3" />
                         </div>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
+              {/* Grand Total Footer */}
+              <tfoot>
+                <tr className="bg-amber-400/20 text-white font-black border-t-2 border-black divide-x-2 divide-black text-right">
+                  <td colSpan={3} className="py-3 px-3 text-center uppercase tracking-wider text-xs">
+                    {t('ጠቅላላ ድምር (GRAND TOTAL)', 'Grand Total')}
+                  </td>
+                  <td className="py-3 px-2 font-mono">{totalBaseSalary.toLocaleString()}</td>
+                  <td className="py-3 px-2 font-mono text-amber-300">+{totalRationAllowance.toLocaleString()}</td>
+                  <td className="py-3 px-2 font-mono">+{totalGrossPensionPool.toLocaleString()}</td>
+                  <td className="py-3 px-2 font-mono font-black text-white">{totalGross.toLocaleString()}</td>
+                  <td className="py-3 px-2 font-mono text-rose-300">-{totalIncomeTax.toLocaleString()}</td>
+                  <td className="py-3 px-2 font-mono text-rose-300">-{totalPensionEmployee.toLocaleString()}</td>
+                  <td className="py-3 px-2 font-mono text-sky-300">-{totalOtherDeductions.toLocaleString()}</td>
+                  <td className="py-3 px-2 font-mono font-black text-rose-400">-{totalDeductions.toLocaleString()}</td>
+                  <td className="py-3 px-2 font-mono font-black text-emerald-400 text-sm">{totalNet.toLocaleString()}</td>
+                  <td className="py-3 px-2 text-center text-[10px] text-slate-400">ETB</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: OFFICER SALARY CALCULATOR & ADJUSTMENT HUB */}
+      {/* TAB 2: MONTHLY PAYROLL ARCHIVE & DOWNLOADABLE FILES (PDF & EXCEL) */}
       {/* ========================================================================= */}
-      {activeTab === 'officer_calculator' && (
-        <div className="space-y-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-2">
-              <Calculator className="w-4 h-4 text-amber-400" />
-              <span>{t('የአባላት ደመወዝ ማስተካከያና ስሌት ማዕከል', 'Officer Salary Adjustment & Live Calculator')}</span>
-            </h3>
-            <p className="text-xs text-slate-300 max-w-2xl mb-4">
-              {t(
-                'ማንኛውንም አባል ይምረጡ፤ መሰረታዊ ደመወዝ ወይም አበል ያስገቡ ወይም ተጨማሪ የሚቀናነስ ነገር ያስገቡ። ሲስተሙ በራስ-ሰር ጠቅላላ ተከፋይ፣ ጡረታ፣ ግብርና የተጣራ ደመወዙን ያሰላል። ከዛም በፋየርስቶር ማስቀመጥ ይችላሉ።',
-                'Select any officer to adjust base salary, allowances, and custom deductions. The system recalculates everything in real-time.'
-              )}
-            </p>
+      {activeTab === 'payroll_history' && (
+        <div className="space-y-6">
+          {/* Create & Archive Current Month Form Card */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Save className="w-4 h-4 text-amber-400" />
+                  <span>{t('የዚህን ወር ደመወዝ በፋይል መዝግብና ሴቭ አድርግ', 'Archive Current Month to Firestore File')}</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {t(
+                    'ደመወዝ ሲሰራ በወር መቀመጥ አለበት፤ የወር የተሰራው በፋይል ይቀመጣል። እያንዳንዱ ወር እንደ ቋሚ ታሪክ በፋየርስቶር ይቀመጣል።',
+                    'Calculated salaries are permanently recorded per month in Cloud Firestore as distinct downloadable records.'
+                  )}
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {payrollMembers.map(m => {
-                const calc = calculateOfficerPayroll(
-                  m,
-                  payrollConfig,
-                  memberPayrollCustomizations[m.policeId.toUpperCase()]
-                );
+              <button
+                onClick={handleArchiveCurrentMonth}
+                disabled={isArchiving}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Save className={`w-4 h-4 ${isArchiving ? 'animate-spin' : ''}`} />
+                <span>{isArchiving ? t('በመመዝገብ ላይ...', 'Saving Archive...') : t('ይህን ወር በፋይል ሴቭ አድርግ', 'Save Month Archive')}</span>
+              </button>
+            </div>
 
-                return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 text-xs">
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">
+                  {t('የወሩ ስም (Month Title):', 'Month Title:')}
+                </label>
+                <input
+                  type="text"
+                  value={archiveMonthName}
+                  onChange={e => setArchiveMonthName(e.target.value)}
+                  placeholder="ለምሳሌ፡ የመስከረም 2019 ዓ.ም (September 2026)"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">
+                  {t('የማህደር ማስታወሻ (Archive Remarks):', 'Archive Remarks:')}
+                </label>
+                <input
+                  type="text"
+                  value={archiveNotes}
+                  onChange={e => setArchiveNotes(e.target.value)}
+                  placeholder="የኮሚሽኑ ወርሃዊ ይፋዊ ክፍያ"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* List of Past Months Stored as Files in Firestore */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-400" />
+                <span>{t('በፋየርስቶር የተቀመጡ የወር ክፍያ ፋይሎች (Saved Historical Archives)', 'Archived Monthly Payroll Files')}</span>
+              </h3>
+              <span className="text-xs text-slate-400 font-mono">
+                {monthlyPayrollArchives.length} {t('የተመዘገቡ ወራት', 'months archived')}
+              </span>
+            </div>
+
+            {monthlyPayrollArchives.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400 bg-slate-950/60 rounded-2xl border border-slate-800">
+                <Calendar className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <h5 className="font-bold text-white text-sm">
+                  {t('ምንም የተቀመጠ ወርሃዊ የደመወዝ ፋይል የለም', 'No monthly payroll archives saved yet')}
+                </h5>
+                <p className="mt-1">
+                  {t(
+                    'ከላይ "ይህን ወር በፋይል ሴቭ አድርግ" የሚለውን በመጫን የወሩን ፔሮል በክላውድ ፋይልነት ማስቀመጥ ይችላሉ።',
+                    'Click "Save Month Archive" above to snapshot this month into a permanent Firestore record.'
+                  )}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {monthlyPayrollArchives.map(arch => (
                   <div
-                    key={m.policeId}
-                    className="bg-slate-950 border border-slate-800 hover:border-amber-500/50 p-4 rounded-xl transition-all shadow flex flex-col justify-between"
+                    key={arch.id}
+                    className="p-5 bg-slate-950 border border-slate-800 hover:border-amber-500/40 rounded-2xl transition-all shadow flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center space-x-3">
-                        <img
-                          src={m.identity.photoUrl}
-                          alt=""
-                          className="w-11 h-11 rounded-lg object-cover border border-amber-400/40"
-                        />
-                        <div>
-                          <span className="font-mono text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                            {m.policeId}
-                          </span>
-                          <h4 className="font-bold text-white text-xs mt-0.5">{m.identity.fullName}</h4>
-                          <span className="text-[11px] text-slate-400">{m.currentRank}</span>
-                        </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
+                          {arch.id}
+                        </span>
+                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-bold">
+                          ✓ {t('በፋየርስቶር የፀደቀ ፋይል', 'Stored in Firestore')}
+                        </span>
+                      </div>
+                      <h4 className="text-base font-bold text-white mt-1">{arch.monthName}</h4>
+                      <p className="text-xs text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>{t('ያዘጋጀው ባለሙያ:', 'By:')} <strong className="text-slate-200">{arch.processedBy}</strong></span>
+                        <span>·</span>
+                        <span>{t('የተመዘገበበት ቀን:', 'Date:')} <strong className="text-slate-200 font-mono">{arch.createdAt}</strong></span>
+                        <span>·</span>
+                        <span>{t('ተከፋይ አባላት:', 'Officers:')} <strong className="text-amber-300 font-mono">{arch.totalOfficers}</strong></span>
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-sans">{t('ጠቅላላ ደመወዝ', 'Gross')}</span>
+                        <span className="text-white font-bold">{arch.totalGrossSalary.toLocaleString()} ETB</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-rose-400 block font-sans">{t('ጠቅላላ ቅነሳ', 'Deductions')}</span>
+                        <span className="text-rose-400 font-bold">-{arch.totalDeductions.toLocaleString()} ETB</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-emerald-400 block font-sans">{t('የተጣራ ክፍያ', 'Net Pay')}</span>
+                        <span className="text-emerald-400 font-black text-sm">{arch.totalNetPay.toLocaleString()} ETB</span>
                       </div>
                     </div>
 
-                    <div className="mt-3 pt-3 border-t border-slate-800/80 grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">{t('መሰረታዊ', 'Base')}</span>
-                        <span className="font-mono font-bold text-white">{calc.baseSalary.toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-amber-300 block">⭐ {t('የቀለብ ብር', 'Ration')}</span>
-                        <span className="font-mono font-bold text-amber-300">+{calc.allowances.ration.toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-emerald-400 block">{t('የተጣራ ተከፋይ', 'Net Pay')}</span>
-                        <span className="font-mono font-black text-emerald-400">{calc.netPay.toLocaleString()}</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="flex items-center gap-2 self-end md:self-center">
                       <button
-                        onClick={() => setSelectedMemberForAdjustment(m)}
-                        className="py-2 bg-slate-900 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-500 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 shadow"
+                        onClick={() => setSelectedArchiveForView(arch)}
+                        className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                        title={t('የተቀመጠውን ወር ሰንጠረዥ ተመልከት', 'Preview Sheet')}
                       >
-                        <Sliders className="w-3.5 h-3.5" />
-                        <span>{t('ቅነሳ/አበል አስተካክል', 'Adjust')}</span>
+                        <Eye className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{t('ሰንጠረዥ እይ', 'View')}</span>
                       </button>
 
                       <button
-                        onClick={() => handleNotifySingleMember(m.policeId)}
-                        disabled={notifyingMemberId === m.policeId}
-                        className="py-2 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 shadow disabled:opacity-50"
+                        onClick={() => setSelectedArchiveForView(arch)}
+                        className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow"
+                        title={t('ይፋዊ የክፍያ ሰነድ አትም / PDF', 'Print Voucher')}
                       >
-                        <Bell className={`w-3.5 h-3.5 ${notifyingMemberId === m.policeId ? 'animate-spin' : ''}`} />
-                        <span>{notifyingMemberId === m.policeId ? '...' : t('ስሊፕ አሳውቅ', 'Notify Slip')}</span>
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>{t('አትም / PDF', 'Print')}</span>
                       </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: SALARY SCALE MATRIX (GRADES 1-12 & STEPS 1-9) */}
+      {/* TAB 3: QUICK SALARY ADJUSTMENT BY MEMBER ID (WITHOUT BROWSING SHEET) */}
+      {/* ========================================================================= */}
+      {activeTab === 'quick_adjust' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
+          <div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Calculator className="w-5 h-5 text-amber-400" />
+              <span>{t('በየወሩ የሚስተካከሉ ደመወዞች ፈጣን ማስተካከያ በID', 'Quick Monthly Salary Adjustment by Officer ID')}</span>
+            </h3>
+            <p className="text-xs text-slate-300 mt-1 max-w-3xl">
+              {t(
+                'ኦፊሰሩ በራሱ የሚስተካከሉትን ብቻ ፔሮል ላይ ሳይገባ አይዲ ቁጥራቸውን ብቻ በመፃፍ የሚስተካከለውን አርዕስት በመጥቀስ አስተካክሎ ሴቭ ሲል ቀጥታ ፔሮል ላይ እንዲስተካከል ያድርጉ። የሚስተካከል ከሌለ ቀደም ሲል የተከፈለው እንደነበረ ይቀመጣል።',
+                'Fast lookup by Police ID without navigating the wide sheet. Select the item to adjust and save; unchanged members retain previous paid amounts.'
+              )}
+            </p>
+          </div>
+
+          {quickAdjStatus && (
+            <div
+              className={`p-4 rounded-2xl border text-xs font-bold flex items-center gap-2 ${
+                quickAdjStatus.type === 'success'
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+              }`}
+            >
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{quickAdjStatus.text}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleQuickAdjSubmit} className="space-y-4 max-w-2xl bg-slate-950 p-6 rounded-2xl border border-slate-800">
+            {/* Step 1: Member ID Input */}
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                1. {t('የአባሉ የፖሊስ መታወቂያ ቁጥር (Police ID):', 'Officer Police ID:')}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  value={quickAdjId}
+                  onChange={e => handleQuickAdjIdSearch(e.target.value)}
+                  placeholder="ለምሳሌ፡ BG-000101 ወይም BG-000125"
+                  className="flex-1 bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono uppercase"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleQuickAdjIdSearch(quickAdjId)}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700"
+                >
+                  {t('ፈልግ', 'Find')}
+                </button>
+              </div>
+            </div>
+
+            {/* Display Officer Info If Found */}
+            {getMemberByPoliceId(quickAdjId) && (
+              <div className="p-3.5 bg-slate-900/90 border border-amber-500/30 rounded-xl flex items-center gap-3">
+                <img
+                  src={getMemberByPoliceId(quickAdjId)?.identity.photoUrl}
+                  alt=""
+                  className="w-12 h-12 rounded-xl object-cover border border-amber-400"
+                />
+                <div className="text-xs">
+                  <h4 className="font-bold text-white text-sm">{getMemberByPoliceId(quickAdjId)?.identity.fullName}</h4>
+                  <p className="text-slate-400 font-mono text-[11px]">
+                    {getMemberByPoliceId(quickAdjId)?.currentRank} · {getMemberByPoliceId(quickAdjId)?.currentDepartment}
+                  </p>
+                  <span className="text-amber-400 text-[10px]">
+                    {isCommissionOfficer(getMemberByPoliceId(quickAdjId)!)
+                      ? '🏛️ የፖሊስ ኮሚሽን አባል'
+                      : '📍 የዞን/ወረዳ አባል'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Choose Adjustment Field */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  2. {t('የሚስተካከለው አርዕስት (Adjustment Field):', 'Adjustment Field:')}
+                </label>
+                <select
+                  value={quickAdjField}
+                  onChange={e => {
+                    const f = e.target.value as any;
+                    setQuickAdjField(f);
+                    handleQuickAdjIdSearch(quickAdjId);
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
+                >
+                  <option value="baseSalary">GROSS - መሰረታዊ ደመወዝ</option>
+                  <option value="ration">NO.TAX - የቀለብ አበል (Food/Ration)</option>
+                  <option value="duty">Gross PENSION - የስራ/ተልዕኮ አበል (Duty Allowance)</option>
+                  <option value="hazard">Gross PENSION - የአደጋ አበል (Hazard)</option>
+                  <option value="housing">Gross PENSION - የቤት አበል (Housing)</option>
+                  <option value="transport">Gross PENSION - የትራንስፖርት አበል (Transport)</option>
+                  <option value="grade_step">ደረጃና እርከን (Salary Grade & Step)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  3. {t('አዲሱ መጠን (New Amount ETB):', 'New Amount (ETB):')}
+                </label>
+                <input
+                  type="number"
+                  required
+                  value={quickAdjValue}
+                  onChange={e => setQuickAdjValue(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono font-bold"
+                />
+              </div>
+            </div>
+
+            {quickAdjField === 'grade_step' && (
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  {t('እርከን (Step 1-9):', 'Step (1-9):')}
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={9}
+                  value={quickAdjStep}
+                  onChange={e => setQuickAdjStep(parseInt(e.target.value, 10) || 1)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">
+                {t('የማስተካከያው ምክንያት ወይም ማስታወሻ (Reason / Notes):', 'Reason / Notes:')}
+              </label>
+              <input
+                type="text"
+                value={quickAdjReason}
+                onChange={e => setQuickAdjReason(e.target.value)}
+                placeholder="ለምሳሌ፡ የወርሃዊ አበል ጭማሪ"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+            >
+              <Save className="w-4 h-4" />
+              <span>{t('አስተካክለህ በፋየርስቶር ሴቭ አድርግ (Save to Payroll & Firestore)', 'Save Adjustment to Payroll')}</span>
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: SALARY SCALE MATRIX (GRADES 1-10 & STEPS 1-9) */}
       {/* ========================================================================= */}
       {activeTab === 'scale_matrix' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -860,20 +1430,20 @@ export const PayrollManager: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: DEDUCTION & TAX CONFIGURATION ENGINE */}
+      {/* TAB 5: DEDUCTION & TAX RULES + INSTITUTIONAL DEDUCTIONS BY MEMBER ID */}
       {/* ========================================================================= */}
       {activeTab === 'deduction_rules' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Settings className="w-4 h-4 text-amber-400" />
-                <span>{t('የቅነሳዎችና ግብር ህግጋት ማዋቀሪያ (Deduction & Tax Engine)', 'Deduction & Tax Engine')}</span>
+                <span>{t('የቅነሳዎችና ግብር ህግጋት ማዋቀሪያ (Deduction & Tax Engine)', 'Deductions & Tax Engine')}</span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
                 {t(
-                  'የጡረታ መዋጮ፣ የገቢ ግብር እርከኖችና ቋሚ ተቋማዊ ቅነሳዎችን አንዴ በማዋቀር በሲስተሙ ለሁሉም አባላት በራስ-ሰር እንዲሰላ ያድርጉ።',
-                  'Configure global deduction rates and Ethiopian income tax brackets stored in Firestore.'
+                  'ተቋማዊ ወርሃዊ መዋጮዎች ላይ ኦፊሰሩ በአይዲ ቁጥራቸው መሰረት ሲያስገባ ሴቭ ሲል ሲስተሙ በራሱ ፔሮል ላይ የሚያስተካክልበት መሳሪያ።',
+                  'Standard institutional deductions entry by member ID, automatically recalculated on live payroll.'
                 )}
               </p>
             </div>
@@ -894,7 +1464,216 @@ export const PayrollManager: React.FC = () => {
             </div>
           )}
 
-          {/* Section 1: Statutory Pension Rates */}
+          {/* Section 1: STANDARD INSTITUTIONAL DEDUCTIONS ENTRY BY POLICE ID (Requested by user) */}
+          <div className="bg-slate-950 border border-amber-500/30 p-5 rounded-2xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div>
+                <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                  <CreditCard className="w-4 h-4" />
+                  <span>
+                    ⭐ {t('ተቋማዊ ወርሃዊ መዋጮዎች በአይዲ ቁጥር ማስገቢያና በፔሮል ላይ ማስተካከያ (STANDARD INSTITUTIONAL DEDUCTIONS)', 'Standard Deductions by Officer ID')}
+                  </span>
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {t(
+                    'ኦፊሰሩ በአይዲ ቁጥራቸው መሰረት የተለያዩ ተቋማዊ ቅነሳዎችን ሲያስገባና ሴቭ ሲል ሲስተሙ በራሱ ፔሮል ላይ other deduction አምድን በቀጥታ ያዘምናል',
+                    'Enter member ID to update specific monthly deductions. The system updates the live payroll other didaction column.'
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {dedAdjStatus && (
+              <div
+                className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                  dedAdjStatus.type === 'success'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                }`}
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>{dedAdjStatus.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleDedAdjSubmit} className="space-y-4">
+              {/* Member ID Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  {t('የአባሉ መታወቂያ ቁጥር (Officer Police ID):', 'Officer Police ID:')}
+                </label>
+                <div className="flex gap-2 max-w-md">
+                  <input
+                    type="text"
+                    required
+                    value={dedAdjId}
+                    onChange={e => handleDedIdSearch(e.target.value)}
+                    placeholder="ለምሳሌ፡ BG-000101"
+                    className="flex-1 bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2 text-xs text-white font-mono uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDedIdSearch(dedAdjId)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700"
+                  >
+                    {t('አባል ፈልግ', 'Find Officer')}
+                  </button>
+                </div>
+              </div>
+
+              {getMemberByPoliceId(dedAdjId) && (
+                <div className="p-3 bg-slate-900 border border-amber-500/20 rounded-xl flex items-center gap-3">
+                  <img
+                    src={getMemberByPoliceId(dedAdjId)?.identity.photoUrl}
+                    alt=""
+                    className="w-10 h-10 rounded-lg object-cover border border-amber-400"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-white block">{getMemberByPoliceId(dedAdjId)?.identity.fullName}</span>
+                    <span className="text-slate-400 font-mono text-[11px]">
+                      {getMemberByPoliceId(dedAdjId)?.currentRank} · {getMemberByPoliceId(dedAdjId)?.policeId}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Deductions Inputs Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                {/* 1. Selam Biruh Savings */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <label className="text-[11px] text-slate-300 font-bold block mb-1">
+                    {t('የሰላም ብሩህ ወርሃዊ ቁጠባ', 'Selam Biruh Monthly Savings')}
+                  </label>
+                  <input
+                    type="number"
+                    value={selamBiruhSavings}
+                    onChange={e => setSelamBiruhSavings(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white text-right focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* 2. Selam Biruh Lottery Share */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <label className="text-[11px] text-slate-300 font-bold block mb-1">
+                    {t('የሰላም ብሩህ የእጣ ክፍያ', 'Selam Biruh Share/Lottery')}
+                  </label>
+                  <input
+                    type="number"
+                    value={selamBiruhLotteryShare}
+                    onChange={e => setSelamBiruhLotteryShare(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white text-right focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* 3. Selam Biruh Loan */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <label className="text-[11px] text-slate-300 font-bold block mb-1">
+                    {t('የሰላም ብሩህ ብድር ቅነሳ', 'Selam Biruh Loan Repayment')}
+                  </label>
+                  <input
+                    type="number"
+                    value={selamBiruhLoan}
+                    onChange={e => setSelamBiruhLoan(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white text-right focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* 4. General SACCO Loan */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <label className="text-[11px] text-slate-300 font-bold block mb-1">
+                    {t('አጠቃላይ የብድርና ቁጠባ ብድር', 'General SACCO Loan')}
+                  </label>
+                  <input
+                    type="number"
+                    value={generalCreditLoan}
+                    onChange={e => setGeneralCreditLoan(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white text-right focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* 5. Personal Loan */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <label className="text-[11px] text-rose-300 font-bold block mb-1">
+                    {t('ከግል ብድር ቅነሳ (Personal Loan)', 'Personal Advance Loan')}
+                  </label>
+                  <input
+                    type="number"
+                    value={personalLoan}
+                    onChange={e => setPersonalLoan(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-rose-300 text-right focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* 6. HIV Fund */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <label className="text-[11px] text-emerald-300 font-bold block mb-1">
+                    {t('የኤችአይቪ ፈንድ መዋጮ', 'HIV/AIDS Contribution')}
+                  </label>
+                  <input
+                    type="number"
+                    value={hivFund}
+                    onChange={e => setHivFund(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-emerald-300 text-right focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* 7. Medical Contribution */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <label className="text-[11px] text-slate-300 font-bold block mb-1">
+                    {t('የህክምና መዋጮ / መድህን', 'Medical Contribution')}
+                  </label>
+                  <input
+                    type="number"
+                    value={medical}
+                    onChange={e => setMedical(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white text-right focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* 8. Other Deductions */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <label className="text-[11px] text-slate-300 font-bold block mb-1">
+                    {t('ልዩ ልዩ / ሌሎች ቅነሳዎች', 'Other Custom Deductions')}
+                  </label>
+                  <input
+                    type="number"
+                    value={otherDeduction}
+                    onChange={e => setOtherDeduction(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white text-right focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Total Other Deduction Preview */}
+              <div className="p-3 bg-slate-900 rounded-xl flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-300">
+                  {t('በዚህ አባል ፔሮል ላይ የሚመዘገብ ጠቅላላ other didaction:', 'Total other didaction to apply:')}
+                </span>
+                <span className="font-mono font-black text-amber-400 text-sm">
+                  {(
+                    selamBiruhSavings +
+                    selamBiruhLotteryShare +
+                    selamBiruhLoan +
+                    generalCreditLoan +
+                    personalLoan +
+                    hivFund +
+                    medical +
+                    otherDeduction
+                  ).toLocaleString()} ETB
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                className="py-3 px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+              >
+                <Save className="w-4 h-4" />
+                <span>{t('በፔሮል ላይ መዝግብና ሴቭ አድርግ (Save Deductions to Live Payroll)', 'Save Deductions to Payroll')}</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Section 2: Statutory Pension Rates */}
           <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
             <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
               <ShieldCheck className="w-4 h-4" />
@@ -952,7 +1731,7 @@ export const PayrollManager: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 2: Progressive Ethiopian Tax Brackets */}
+          {/* Section 3: Progressive Ethiopian Tax Brackets */}
           <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
             <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
               <Calculator className="w-4 h-4" />
@@ -994,50 +1773,6 @@ export const PayrollManager: React.FC = () => {
               </table>
             </div>
           </div>
-
-          {/* Section 3: Standard Institutional Deductions */}
-          <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
-            <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-              <CreditCard className="w-4 h-4" />
-              <span>{t('ተቋማዊ ወርሃዊ መዋጮዎች (Standard Institutional Deductions)', 'Standard Institutional Deductions')}</span>
-            </h4>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {localRules.standardDeductions.map(item => (
-                <div key={item.id} className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white">{item.name}</span>
-                    <input
-                      type="checkbox"
-                      checked={item.isActive}
-                      onChange={e => {
-                        const updated = localRules.standardDeductions.map(d =>
-                          d.id === item.id ? { ...d, isActive: e.target.checked } : d
-                        );
-                        setLocalRules({ ...localRules, standardDeductions: updated });
-                      }}
-                      className="w-4 h-4 rounded text-amber-500 bg-slate-950 border-slate-700"
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-400">{item.description}</p>
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-400">{t('መጠን (ብር):', 'Amount (ETB):')}</span>
-                    <input
-                      type="number"
-                      value={item.value}
-                      onChange={e => {
-                        const updated = localRules.standardDeductions.map(d =>
-                          d.id === item.id ? { ...d, value: parseFloat(e.target.value) || 0 } : d
-                        );
-                        setLocalRules({ ...localRules, standardDeductions: updated });
-                      }}
-                      className="w-24 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-right text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
@@ -1056,6 +1791,15 @@ export const PayrollManager: React.FC = () => {
           member={selectedMemberForPayslip}
           initialTab="salary"
           onClose={() => setSelectedMemberForPayslip(null)}
+        />
+      )}
+
+      {/* Historical Payroll Archive Modal for Previewing and Printing past months */}
+      {selectedArchiveForView && (
+        <HistoricalPayrollModal
+          archive={selectedArchiveForView}
+          isOpen={!!selectedArchiveForView}
+          onClose={() => setSelectedArchiveForView(null)}
         />
       )}
     </div>

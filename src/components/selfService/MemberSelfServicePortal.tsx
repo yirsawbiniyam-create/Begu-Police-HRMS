@@ -320,11 +320,76 @@ export const MemberSelfServicePortal: React.FC = () => {
                 setAppTitle('የማህደር መረጃ ማስተካከያ ቅሬታ ማመልከቻ');
                 setShowNewAppModal(true);
               }}
-              className="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all shadow-sm"
+              className="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all shadow-sm w-full sm:w-auto justify-center"
             >
               <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
               <span>{t('የመረጃ ቅሬታ ጻፍ', 'Submit Info Complaint')}</span>
             </button>
+          </div>
+
+          {/* PROMINENT CARDS: NEXT STEP INCREMENT DATE & NEXT RANK PROMOTION DATE */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* 1. የእርከን ማግኛ ጊዜ (Next Step Increment Date) */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-amber-500/30 p-5 rounded-2xl shadow-md flex items-start justify-between gap-3">
+              <div className="space-y-1.5 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                    <TrendingUp className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">
+                      {t('የእርከን ማግኛ ጊዜ', 'Next Step Increment Date')}
+                    </span>
+                    <span className="text-base sm:text-lg font-black text-white font-mono">
+                      {activeMember.nextStepIncrementDate || '2026-12-01'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300">
+                  <span>{t('የአሁን ደረጃ/እርከን:', 'Current Grade & Step:')}</span>
+                  <span className="font-mono font-bold text-amber-300">
+                    Grade {activeMember.salaryGrade} · Step {activeMember.salaryStep}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>{t('ቀጣይ የሚያድግበት እርከን:', 'Next Step Target:')}</span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    Step {Math.min(9, (activeMember.salaryStep || 1) + 1)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. የማዕረግ ማግኛ ጊዜ (Next Rank Promotion Date) */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-blue-500/30 p-5 rounded-2xl shadow-md flex items-start justify-between gap-3">
+              <div className="space-y-1.5 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-xl bg-blue-500/20 text-blue-300">
+                    <Award className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <span className="text-[11px] font-bold text-blue-300 uppercase tracking-wider block">
+                      {t('የማዕረግ እድገት ማግኛ ጊዜ', 'Next Rank Promotion Date')}
+                    </span>
+                    <span className="text-base sm:text-lg font-black text-white font-mono">
+                      {activeMember.nextPromotionEligibilityDate || '2027-04-15'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300">
+                  <span>{t('የአሁን ማዕረግ:', 'Current Rank:')}</span>
+                  <span className="font-bold text-blue-300">{activeMember.currentRank}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>{t('የአገልግሎት ዘመን:', 'Tenure in Force:')}</span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    {2026 - parseInt(activeMember.employmentDate.substring(0, 4), 10)} {t('ዓመታት', 'years')}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

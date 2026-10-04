@@ -17,7 +17,10 @@ import {
   Cloud,
   Shield,
   Camera,
-  CheckCircle
+  CheckCircle,
+  TrendingUp,
+  Award,
+  Clock
 } from 'lucide-react';
 import { SystemLogoModal } from '../common/SystemLogoModal';
 import {
@@ -39,8 +42,17 @@ interface OperationsDashboardProps {
   onOpenMemberFile?: (policeId: string) => void;
 }
 
-export const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ onNavigateTab }) => {
-  const { members, applications, t, systemLogo, isLogoSynced, currentRole } = useHrms();
+export const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ onNavigateTab, onOpenMemberFile }) => {
+  const {
+    members,
+    applications,
+    t,
+    systemLogo,
+    isLogoSynced,
+    currentRole,
+    eligibleStepIncrementMembers,
+    eligibleRankPromotionMembers
+  } = useHrms();
   const [showLogoModal, setShowLogoModal] = useState(false);
 
   // Aggregate statistics dynamically
@@ -123,6 +135,119 @@ export const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ onNavi
 
   return (
     <div className="space-y-6">
+      {/* Promotion & Step Increment Due Alerts for Admin */}
+      {(eligibleStepIncrementMembers.length > 0 || eligibleRankPromotionMembers.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {eligibleStepIncrementMembers.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border-l-4 border-amber-500 p-4 rounded-r-2xl flex items-start justify-between shadow-md">
+              <div className="flex items-start space-x-3">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 mt-0.5">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">
+                      {eligibleStepIncrementMembers.length}
+                    </span>
+                    <h4 className="text-sm font-bold text-amber-300">
+                      {t('እርከን የሚያገኙ አባላት (Step Increment Due)', 'Step Increment Due')}
+                    </h4>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1">
+                    {t(
+                      `${eligibleStepIncrementMembers.length} አባላት ዓመታዊ የእርከን ማግኛ ጊዜያቸው ደርሷል።`,
+                      `${eligibleStepIncrementMembers.length} officers are due for salary step increment.`
+                    )}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {eligibleStepIncrementMembers.slice(0, 4).map(m => (
+                      <button
+                        key={m.policeId}
+                        onClick={() => {
+                          if (onOpenMemberFile) onOpenMemberFile(m.policeId);
+                          else onNavigateTab('personnel');
+                        }}
+                        className="text-[11px] font-mono font-medium text-amber-300 bg-slate-900 hover:bg-slate-800 px-2 py-0.5 rounded-lg border border-amber-500/30 flex items-center gap-1 transition-colors"
+                      >
+                        <span>{m.identity.fullName}</span>
+                        <span className="text-slate-400">({m.policeId})</span>
+                      </button>
+                    ))}
+                    {eligibleStepIncrementMembers.length > 4 && (
+                      <span className="text-[10px] text-slate-400 self-center">
+                        +{eligibleStepIncrementMembers.length - 4} ሌሎች
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => onNavigateTab('payroll')}
+                className="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors flex-shrink-0 ml-3 shadow"
+              >
+                <span>{t('እርከን ስጥ', 'Grant Steps')}</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {eligibleRankPromotionMembers.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-500/15 via-blue-500/10 to-transparent border-l-4 border-blue-500 p-4 rounded-r-2xl flex items-start justify-between shadow-md">
+              <div className="flex items-start space-x-3">
+                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 mt-0.5">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-black bg-blue-500 text-white px-2 py-0.5 rounded-full">
+                      {eligibleRankPromotionMembers.length}
+                    </span>
+                    <h4 className="text-sm font-bold text-blue-300">
+                      {t('ማዕረግ የሚያገኙ አባላት (Rank Promotion Due)', 'Rank Promotion Due')}
+                    </h4>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1">
+                    {t(
+                      `${eligibleRankPromotionMembers.length} አባላት ቀጣይ የማዕረግ እድገት ማግኛ ጊዜያቸው ደርሷል።`,
+                      `${eligibleRankPromotionMembers.length} officers reached tenure requirement for next rank.`
+                    )}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {eligibleRankPromotionMembers.slice(0, 4).map(m => (
+                      <button
+                        key={m.policeId}
+                        onClick={() => {
+                          if (onOpenMemberFile) onOpenMemberFile(m.policeId);
+                          else onNavigateTab('personnel');
+                        }}
+                        className="text-[11px] font-mono font-medium text-blue-300 bg-slate-900 hover:bg-slate-800 px-2 py-0.5 rounded-lg border border-blue-500/30 flex items-center gap-1 transition-colors"
+                      >
+                        <span>{m.identity.fullName}</span>
+                        <span className="text-slate-400">({m.currentRank})</span>
+                      </button>
+                    ))}
+                    {eligibleRankPromotionMembers.length > 4 && (
+                      <span className="text-[10px] text-slate-400 self-center">
+                        +{eligibleRankPromotionMembers.length - 4} ሌሎች
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => onNavigateTab('personnel')}
+                className="text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors flex-shrink-0 ml-3 shadow"
+              >
+                <span>{t('ማዕረግ ስጥ', 'Promote')}</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Top Banner Alert if pending retirements or applications */}
       {upcomingRetirements.length > 0 && (
         <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border-l-4 border-amber-500 p-4 rounded-r-lg flex items-start justify-between">

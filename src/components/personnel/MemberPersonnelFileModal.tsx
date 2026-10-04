@@ -39,7 +39,8 @@ import {
   Check,
   AlertCircle,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Save
 } from 'lucide-react';
 
 interface MemberPersonnelFileModalProps {
@@ -71,7 +72,10 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
     processServiceSeparation,
     updateSalaryGradeStep,
     getCalculatedPayroll,
-    getMemberByPoliceId
+    getMemberByPoliceId,
+    updateMemberDutyStation,
+    updateMemberStepAndPromotionDates,
+    applyStepIncrement
   } = useHrms();
 
   // Always use the freshest member state from HrmsContext so newly added items show up immediately!
@@ -82,6 +86,18 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Duty Station & Commission Payroll Eligibility States
+  const [dutyStationAddress, setDutyStationAddress] = useState(
+    member.dutyStationAddress || (member.currentStation.includes('አሶሳ') ? 'የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሚሽን ዋና መምሪያ - አሶሳ' : member.currentStation)
+  );
+  const [isCommissionStaff, setIsCommissionStaff] = useState<boolean>(
+    member.isCommissionStaff ?? (member.dutyStationAddress?.includes('ኮሚሽን') || member.currentStation?.includes('አሶሳ') || false)
+  );
+
+  // Step Increment & Rank Promotion Dates States
+  const [nextStepDate, setNextStepDate] = useState(member.nextStepIncrementDate || '2026-12-01');
+  const [nextPromoDate, setNextPromoDate] = useState(member.nextPromotionEligibilityDate || '2027-04-15');
+
   // Auto-dismiss feedback message after 4.5 seconds
   useEffect(() => {
     if (feedbackMessage) {
@@ -89,6 +105,43 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
       return () => clearTimeout(timer);
     }
   }, [feedbackMessage]);
+
+  const handleSaveDutyStation = async () => {
+    setIsSubmitting(true);
+    const res = await updateMemberDutyStation(member.policeId, dutyStationAddress, isCommissionStaff);
+    setIsSubmitting(false);
+    setFeedbackMessage({ type: res.success ? 'success' : 'error', text: res.message });
+  };
+
+  const handleSaveStepAndPromoDates = async () => {
+    setIsSubmitting(true);
+    const res = await updateMemberStepAndPromotionDates(member.policeId, nextStepDate, nextPromoDate);
+    setIsSubmitting(false);
+    setFeedbackMessage({ type: res.success ? 'success' : 'error', text: res.message });
+  };
+
+  const handleAutoComputeDates = () => {
+    const today = new Date();
+    const stepD = new Date(today);
+    stepD.setFullYear(today.getFullYear() + 2);
+    const promoD = new Date(today);
+    promoD.setFullYear(today.getFullYear() + 3);
+    setNextStepDate(stepD.toISOString().substring(0, 10));
+    setNextPromoDate(promoD.toISOString().substring(0, 10));
+    setFeedbackMessage({
+      type: 'success',
+      text: t('ቀጣይ የእርከንና ማዕረግ ማግኛ ጊዜ በአውቶማቲክ ተሰልቷል! "ሴቭ አድርግ" የሚለውን ይጫኑ።', 'Dates auto-calculated! Click Save.')
+    });
+  };
+
+  const handleGrantStepIncrementNow = async () => {
+    if (window.confirm(t(`ለአባል ${member.identity.fullName} ቀጣይ እርከን መስጠት ይፈልጋሉ?`, `Grant next salary step increment to ${member.identity.fullName}?`))) {
+      setIsSubmitting(true);
+      const res = await applyStepIncrement(member.policeId);
+      setIsSubmitting(false);
+      setFeedbackMessage({ type: res.success ? 'success' : 'error', text: res.message });
+    }
+  };
 
   const memberAccount = userAccounts.find(
     u => u.policeId && u.policeId.toUpperCase() === member.policeId.toUpperCase()
@@ -741,6 +794,133 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                         {member.leaveBalance.annualRemaining} {t('ቀናት', 'days')}
                       </span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Duty Station Address & Commission Status Editor (Admin Manual Entry) */}
+                <div className="bg-slate-950/80 border border-amber-500/30 rounded-xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>{t('የአባሉ ይፋዊ የስራ አድራሻና የኮሚሽን ፔሮል ምደባ', 'Duty Station & Commission Payroll Eligibility')}</span>
+                    </h4>
+                    <span className="text-[10px] text-slate-400">
+                      {isCommissionStaff ? t('🏛️ የኮሚሽን ፔሮል አባል', 'Commission Staff') : t('📍 የዞን/ወረዳ ጣቢያ', 'Regional Station')}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400">
+                    {t(
+                      'አድሚኑ አባሉ የሚሰራበትን አድራሻ በማኑዋል ሞልቶ ያስገባል። በዝውውር ወደ ኮሚሽኑ ሲመጣና ሲዘዋወር አድሚኑ በማኑዋል ያስተካክላል። ፖሊስ ኮሚሽን ተብሎ የተሞላው ወደ ፔሮል ኦፊሰሩ እንዲገባ ይደረጋል።',
+                      'Admin sets duty station. Members marked as Commission Staff automatically appear on the Payroll Officer roster.'
+                    )}
+                  </p>
+
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <label className="text-slate-300 font-semibold block mb-1">
+                        {t('የስራ ቦታ አድራሻ (Duty Station Address):', 'Duty Station Address:')}
+                      </label>
+                      <input
+                        type="text"
+                        value={dutyStationAddress}
+                        onChange={e => setDutyStationAddress(e.target.value)}
+                        placeholder="ለምሳሌ፡ የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሚሽን ዋና መምሪያ - አሶሳ"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={isCommissionStaff}
+                          onChange={e => setIsCommissionStaff(e.target.checked)}
+                          className="w-4 h-4 rounded text-amber-500 bg-slate-950 border-slate-700"
+                        />
+                        <span className="font-bold">
+                          {t('ይህ አባል በፖሊስ ኮሚሽን ዋና መምሪያ የሚሰራ ነው (ወደ ፔሮል ኦፊሰሩ ይግባ)', 'Assign as Police Commission Staff (Include in Payroll Roster)')}
+                        </span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveDutyStation}
+                        disabled={isSubmitting}
+                        className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1 shadow disabled:opacity-50"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>{t('አድራሻ ሴቭ አድርግ', 'Save Station')}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step Increment & Rank Promotion Eligibility Dates Card */}
+                <div className="bg-slate-950/80 border border-blue-500/30 rounded-xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{t('የእርከንና የማዕረግ ማግኛ ጊዜያት ማስተዳደሪያ', 'Step Increment & Promotion Schedule')}</span>
+                    </h4>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleAutoComputeDates}
+                        className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-blue-300 border border-blue-500/30 rounded-lg text-[11px] font-bold flex items-center gap-1"
+                        title={t('ጊዜውን በራስ-ሰር አስላ', 'Auto-calculate dates based on tenure')}
+                      >
+                        <Sparkles className="w-3 h-3 text-blue-400" />
+                        <span>{t('በአውቶማቲክ አስላ', 'Auto-Compute')}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="text-slate-300 font-semibold block mb-1">
+                        {t('የእርከን ማግኛ ጊዜ (Next Step Date):', 'Next Step Increment Date:')}
+                      </label>
+                      <input
+                        type="date"
+                        value={nextStepDate}
+                        onChange={e => setNextStepDate(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-300 font-semibold block mb-1">
+                        {t('የማዕረግ ማግኛ ጊዜ (Next Promotion Date):', 'Next Rank Promotion Date:')}
+                      </label>
+                      <input
+                        type="date"
+                        value={nextPromoDate}
+                        onChange={e => setNextPromoDate(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={handleGrantStepIncrementNow}
+                      className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 font-bold text-xs rounded-lg border border-emerald-500/40 flex items-center gap-1 transition-all"
+                    >
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      <span>{t('እርከን ስጥ (Grant Step Now)', 'Grant Step')}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveStepAndPromoDates}
+                      disabled={isSubmitting}
+                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg flex items-center gap-1 shadow disabled:opacity-50"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{t('ቀናትን ሴቭ አድርግ', 'Save Dates')}</span>
+                    </button>
                   </div>
                 </div>
               </div>
