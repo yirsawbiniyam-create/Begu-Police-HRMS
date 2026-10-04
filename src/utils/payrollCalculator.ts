@@ -24,20 +24,36 @@ export const DEFAULT_ETHIOPIAN_TAX_BRACKETS: TaxBracket[] = [
 ];
 
 /**
+ * Graduated Medical Contribution by Salary Tier (Official Police Health Fund)
+ * <= 2,000 ETB: 15 ETB
+ * 2,001 – 5,000 ETB: 25 ETB
+ * 5,001 – 7,500 ETB: 35 ETB
+ * 7,501 – 11,000 ETB: 40 ETB
+ * > 11,000 ETB: 50 ETB
+ */
+export function calculateMedicalContribution(salary: number): number {
+  if (salary <= 2000) return 15;
+  if (salary <= 5000) return 25;
+  if (salary <= 7500) return 35;
+  if (salary <= 11000) return 40;
+  return 50;
+}
+
+/**
  * Default Standard Deductions for Police Commission Staff
  */
 export const DEFAULT_STANDARD_DEDUCTIONS: PayrollDeductionConfig[] = [
   {
     id: 'ded-pension',
-    name: 'የመንግስት ሰራተኞችና የፖሊስ ጡረታ መዋጮ',
-    nameEn: 'Statutory Pension Contribution (7%)',
+    name: 'የመንግስት ሰራተኞችና የፖሊስ ጡረታ መዋጮ (7% ከአባል፣ 33% ከመንግስት)',
+    nameEn: 'Statutory Pension Contribution (7% Member, 33% Govt)',
     type: 'percentage',
     value: 0.07,
     isStatutory: true,
     category: 'pension',
     appliesTo: 'base_salary',
     isActive: true,
-    description: 'በህግ የተደነገገ የሰራተኛ 7% የጡረታ መዋጮ'
+    description: 'በህግ የተደነገገ የሰራተኛ 7% እና የመንግስት 33% የፖሊስ ጡረታ መዋጮ'
   },
   {
     id: 'ded-credit-union',
@@ -53,15 +69,15 @@ export const DEFAULT_STANDARD_DEDUCTIONS: PayrollDeductionConfig[] = [
   },
   {
     id: 'ded-health-fund',
-    name: 'የፖሊስ የህክምናና ጤና መድህን ፈንድ',
-    nameEn: 'Police Medical & Health Fund',
+    name: 'የፖሊስ የህክምናና ጤና መድህን መዋጮ (በደመወዝ እርከን)',
+    nameEn: 'Police Medical & Health Fund (Graduated)',
     type: 'fixed',
-    value: 100,
+    value: 35,
     isStatutory: false,
     category: 'health_fund',
     appliesTo: 'gross_salary',
     isActive: true,
-    description: 'የህክምና ወጪዎች ድጋፍ ፈንድ'
+    description: 'በደመወዝ መጠን የተሰላ ወርሃዊ የህክምና መዋጮ (15 - 50 ብር)'
   },
   {
     id: 'ded-red-cross',
@@ -80,8 +96,8 @@ export const DEFAULT_STANDARD_DEDUCTIONS: PayrollDeductionConfig[] = [
 export const DEFAULT_PAYROLL_CONFIG: PayrollGlobalConfig = {
   id: 'global_config',
   useStatutoryTaxBrackets: true,
-  pensionEmployeeRate: 0.07,
-  pensionEmployerRate: 0.11,
+  pensionEmployeeRate: 0.07, // 7% from Member
+  pensionEmployerRate: 0.33, // 33% from Government
   taxBrackets: DEFAULT_ETHIOPIAN_TAX_BRACKETS,
   standardDeductions: DEFAULT_STANDARD_DEDUCTIONS,
   defaultDutyAllowance: 1200,
@@ -235,9 +251,9 @@ export function calculateOfficerPayroll(
   const totalAllowances = duty + field + housing + transport + hazard + ration + additionalTotal;
   const grossSalary = baseSalary + totalAllowances;
 
-  // 3. Pension Deductions
+  // 3. Pension Deductions (7% Member, 33% Government Employer)
   const pensionEmployeeRate = config.pensionEmployeeRate || 0.07;
-  const pensionEmployerRate = config.pensionEmployerRate || 0.11;
+  const pensionEmployerRate = config.pensionEmployerRate || 0.33;
   const pensionEmployee = Math.round(baseSalary * pensionEmployeeRate);
   const pensionEmployer = Math.round(baseSalary * pensionEmployerRate);
 
@@ -283,8 +299,11 @@ export function calculateOfficerPayroll(
   // - የኤችአይቪ ፈንድ (HIV/AIDS Contribution)
   const hivFund = customization?.hivFundDeduction ?? 0;
 
-  // - የህክምና መዋጮ (Medical Contribution)
-  const medical = customization?.medicalDeduction ?? healthInsurance;
+  // - የህክምና መዋጮ (Graduated Medical Contribution: <=2000: 15 ETB, 2001-5000: 25 ETB, 5001-7500: 35 ETB, 7501-11000: 40 ETB, >11000: 50 ETB)
+  const defaultMedicalByTier = calculateMedicalContribution(baseSalary);
+  const medical = customization?.medicalDeduction !== undefined
+    ? customization.medicalDeduction
+    : defaultMedicalByTier;
 
   // - ልዩ ልዩ / ሌሎች ቅነሳዎች (Other Deductions)
   const other = customization?.otherDeductions ?? 0;

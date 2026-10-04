@@ -125,7 +125,7 @@ export const HistoricalPayrollModal: React.FC<HistoricalPayrollModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-[10px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20 uppercase">
-                  {t('በፋየርስቶር የተቀመጠ ማህደር', 'Firestore Archived Record')}
+                  {t('በማህደር የተቀመጠ ይፋዊ ሰነድ', 'Official Archived Record')}
                 </span>
                 <span className="text-xs text-slate-400 font-mono">ID: {archive.id}</span>
               </div>

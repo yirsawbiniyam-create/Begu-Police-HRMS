@@ -132,7 +132,7 @@ interface HrmsContextType {
 
   // Duty Station Address Management & Step/Promotion Eligibility
   updateMemberDutyStation: (policeId: string, dutyStationAddress: string, isCommissionStaff: boolean) => Promise<{ success: boolean; message: string }>;
-  updateMemberStepAndPromotionDates: (policeId: string, stepDate?: string, promoDate?: string) => Promise<{ success: boolean; message: string }>;
+  updateMemberStepAndPromotionDates: (policeId: string, stepDate?: string, promoDate?: string, lastPromoDate?: string, lastStepDate?: string) => Promise<{ success: boolean; message: string }>;
   applyStepIncrement: (policeId: string) => Promise<{ success: boolean; message: string }>;
   eligibleStepIncrementMembers: MemberProfile[];
   eligibleRankPromotionMembers: MemberProfile[];
@@ -607,7 +607,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog({
       user: currentUser?.fullName || currentUser?.username || 'HR/Payroll Specialist',
       role: currentRole,
-      action: 'የደመወዝ ቅነሳዎችና ግብር ህግጋት ተስተካክለው በፋየርስቶር ተቀምጠዋል',
+      action: 'የደመወዝ ቅነሳዎችና ግብር ህግጋት ተስተካክለው በማህደር ተቀምጠዋል',
       targetPoliceId: 'PAYROLL-RULES',
       targetMemberName: 'የተቋሙ አጠቃላይ የደመወዝ ህግጋት',
       category: 'salary'
@@ -615,7 +615,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       success: ok,
       message: ok
-        ? t('የደመወዝ ህግጋት በፋየርስቶር በተሳካ ሁኔታ ተቀምጠዋል!', 'Payroll deduction rules successfully saved to Firestore!')
+        ? t('የደመወዝ ህግጋት በማህደር በተሳካ ሁኔታ ተቀምጠዋል!', 'Payroll deduction rules successfully saved!')
         : t('ህግጋት ተቀምጠዋል (ከመስመር ውጭ)', 'Rules saved locally')
     };
   };
@@ -626,7 +626,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog({
       user: currentUser?.fullName || currentUser?.username || 'HR/Payroll Specialist',
       role: currentRole,
-      action: 'የፖሊስ አባላት የደመወዝ ስኬል በደረጃና በማዕረግ ተስተካክሎ በፋየርስቶር ተቀምጧል',
+      action: 'የፖሊስ አባላት የደመወዝ ስኬል በደረጃና በማዕረግ ተስተካክሎ በማህደር ተቀምጧል',
       targetPoliceId: 'SALARY-SCALES',
       targetMemberName: 'የማዕረግና ደረጃ ስኬል ማትሪክስ',
       category: 'salary'
@@ -634,7 +634,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       success: ok,
       message: ok
-        ? t('የማዕረግ ደመወዝ ስኬል በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!', 'Salary scales matrix successfully saved to Firestore!')
+        ? t('የማዕረግ ደመወዝ ስኬል በማህደር በተሳካ ሁኔታ ተቀምጧል!', 'Salary scales matrix successfully saved!')
         : t('ስኬል ተቀምጧል (ከመስመር ውጭ)', 'Scales saved locally')
     };
   };
@@ -694,7 +694,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog({
       user: currentUser?.fullName || currentUser?.username || 'HR/Payroll Specialist',
       role: currentRole,
-      action: `የአባል ደመወዝ ማስተካከያና ቅነሳ በፋየርስቶር ተመዝግቧል (መሰረታዊ: ${customization.customBaseSalary ?? 'እንደነበረ'})`,
+      action: `የአባል ደመወዝ ማስተካከያና ቅነሳ በማህደር ተመዝግቧል (መሰረታዊ: ${customization.customBaseSalary ?? 'እንደነበረ'})`,
       targetPoliceId: customization.policeId,
       targetMemberName: member?.identity.fullName || customization.policeId,
       category: 'salary'
@@ -703,7 +703,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       success: ok,
       message: ok
-        ? t('የአባሉ ደመወዝና ቅነሳዎች በፋየርስቶር ተቀምጠዋል! ለአባሉ ማሳወቂያ በራስ-ሰር ተልኳል።', 'Member payroll & deductions saved to Firestore! Member auto-notified.')
+        ? t('የአባሉ ደመወዝና ቅነሳዎች በማህደር ተቀምጠዋል! ለአባሉ ማሳወቂያ በራስ-ሰር ተልኳል።', 'Member payroll & deductions saved! Member auto-notified.')
         : t('ተቀምጧል (ከመስመር ውጭ)', 'Saved locally')
     };
   };
@@ -894,7 +894,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       totalNetPay: records.reduce((s, r) => s + r.netPay, 0),
       records,
       status: 'finalized',
-      notes: notes || 'በፋየርስቶር በፋይል የተመዘገበ ይፋዊ የወር ደመወዝ መዝገብ'
+      notes: notes || 'በማህደር በፋይል የተመዘገበ ይፋዊ የወር ደመወዝ መዝገብ'
     };
 
     setMonthlyPayrollArchives(prev => [archive, ...prev.filter(a => a.id !== archiveId)]);
@@ -903,7 +903,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog({
       user: currentUser?.fullName || 'Payroll Specialist',
       role: currentRole,
-      action: `የ${monthName} ወርሃዊ ደመወዝ ተሰርቶ በማህደር በፋየርስቶር ተመዘገበ (${records.length} አባላት)`,
+      action: `የ${monthName} ወርሃዊ ደመወዝ ተሰርቶ በማህደር ተመዘገበ (${records.length} አባላት)`,
       targetPoliceId: 'PAYROLL-ARCHIVE',
       targetMemberName: `${monthName} የደመወዝ መዝገብ`,
       category: 'salary',
@@ -912,7 +912,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       success: true,
-      message: `የ${monthName} ወርሃዊ ደመወዝ በማህደር በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!`
+      message: `የ${monthName} ወርሃዊ ደመወዝ በማህደር በተሳካ ሁኔታ ተቀምጧል!`
     };
   };
 
@@ -974,7 +974,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       success: true,
-      message: `የአባል ${member.identity.fullName} (${pid}) ${field} በተሳካ ሁኔታ ተስተካክሎ በፋየርስቶር ተቀምጧል!`
+      message: `የአባል ${member.identity.fullName} (${pid}) ${field} በተሳካ ሁኔታ ተስተካክሎ በማህደር ተቀምጧል!`
     };
   };
 
@@ -1057,7 +1057,9 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateMemberStepAndPromotionDates = async (
     policeId: string,
     stepDate?: string,
-    promoDate?: string
+    promoDate?: string,
+    lastPromoDate?: string,
+    lastStepDate?: string
   ) => {
     const member = getMemberByPoliceId(policeId);
     if (!member) return { success: false, message: 'አባሉ አልተገኘም' };
@@ -1065,11 +1067,46 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated: MemberProfile = {
       ...member,
       nextStepIncrementDate: stepDate || member.nextStepIncrementDate,
-      nextPromotionEligibilityDate: promoDate || member.nextPromotionEligibilityDate
+      nextPromotionEligibilityDate: promoDate || member.nextPromotionEligibilityDate,
+      lastPromotionDate: lastPromoDate || member.lastPromotionDate,
+      lastStepIncrementDate: lastStepDate || member.lastStepIncrementDate
     };
 
     setMembers(prev => prev.map(m => m.policeId.toUpperCase() === policeId.toUpperCase() ? updated : m));
     await saveMemberToFirebase(updated);
+
+    const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    // 1. Send Delivered Notification to Admin
+    const adminNotif: NotificationItem = {
+      id: `notif-adm-pr-${Date.now()}`,
+      title: `የማዕረግ/እርከን ማግኛ ጊዜ ማንቂያ: ${member.identity.fullName}`,
+      message: `የአባል ${member.identity.fullName} (${policeId}) ቀጣይ ማዕረግ ማግኛ: ${promoDate || updated.nextPromotionEligibilityDate}፤ ቀጣይ እርከን ማግኛ: ${stepDate || updated.nextStepIncrementDate} ሆኖ ተመዝግቧል።`,
+      date: nowIso,
+      isRead: false,
+      type: 'rank',
+      linkTab: 'personnel',
+      deliveryStatus: 'delivered',
+      deliveredAt: nowIso
+    };
+
+    // 2. Send Delivered Notification directly to Member (Self-Service)
+    const memberNotif: NotificationItem = {
+      id: `notif-mem-pr-${Date.now() + 1}`,
+      title: 'የማዕረግና የእርከን ማግኛ ጊዜዎ ተመዝግቧል',
+      message: `ክቡር ${member.currentRank} ${member.identity.fullName}፤ ቀጣይ የማዕረግ ማግኛ ጊዜዎ (${promoDate || updated.nextPromotionEligibilityDate}) እና የእርከን ማግኛ ጊዜዎ (${stepDate || updated.nextStepIncrementDate}) በኮሚሽኑ ማህደርዎ ተመዝግቧል።`,
+      date: nowIso,
+      isRead: false,
+      type: 'rank',
+      targetPoliceId: policeId,
+      linkTab: 'self_service',
+      deliveryStatus: 'delivered',
+      deliveredAt: nowIso
+    };
+
+    setNotifications(prev => [adminNotif, memberNotif, ...prev]);
+    saveNotificationToFirestore(adminNotif);
+    saveNotificationToFirestore(memberNotif);
 
     addAuditLog({
       user: currentUser?.fullName || 'HR Admin',
@@ -1083,7 +1120,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       success: true,
-      message: `የአባል ${member.identity.fullName} የእርከንና ማዕረግ ማግኛ ጊዜ በፋየርስቶር ተቀምጧል!`
+      message: `የአባል ${member.identity.fullName} የእርከንና ማዕረግ ማግኛ ጊዜ ተቀምጧል፤ ለአባሉም ለአድሚኑም ኖቲፊኬሽን ደርሷል!`
     };
   };
 
@@ -1977,7 +2014,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       newValue: training.title
     });
 
-    return { success: true, message: `ስልጠና ${training.title} በተሳካ ሁኔታ ተመዝግቧል እና በፋየርስቶር ተቀምጧል!` };
+    return { success: true, message: `ስልጠና ${training.title} በተሳካ ሁኔታ ተመዝግቧል እና በማህደር ተቀምጧል!` };
   };
 
   const submitPerformanceEvaluation = async (policeId: string, evaluation: Omit<PerformanceRecord, 'id'>): Promise<{ success: boolean; message: string }> => {
@@ -2012,7 +2049,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       newValue: `${evaluation.evaluationPeriod}: ${evaluation.score}%`
     });
 
-    return { success: true, message: 'የአፈጻጸም ምዘና ውጤቱ በተሳካ ሁኔታ ተመዝግቦ በፋየርስቶር ተቀምጧል!' };
+    return { success: true, message: 'የአፈጻጸም ምዘና ውጤቱ በተሳካ ሁኔታ ተመዝግቦ በማህደር ተቀምጧል!' };
   };
 
   const addLeaveRecord = async (policeId: string, leave: Omit<LeaveRecord, 'id'>): Promise<{ success: boolean; message: string }> => {
@@ -2055,7 +2092,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       newValue: `${leave.startDate} to ${leave.endDate}`
     });
 
-    return { success: true, message: `የ${leave.durationDays} ቀናት ፈቃድ በተሳካ ሁኔታ ተመዝግቧል እና በፋየርስቶር ተቀምጧል!` };
+    return { success: true, message: `የ${leave.durationDays} ቀናት ፈቃድ በተሳካ ሁኔታ ተመዝግቧል እና በማህደር ተቀምጧል!` };
   };
 
   const addBenefitRecord = async (policeId: string, benefit: Omit<BenefitItem, 'id'>): Promise<{ success: boolean; message: string }> => {
@@ -2090,7 +2127,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       newValue: benefit.title
     });
 
-    return { success: true, message: `ጥቅማጥቅም ${benefit.title} በተሳካ ሁኔታ ተመዝግቧል እና በፋየርስቶር ተቀምጧል!` };
+    return { success: true, message: `ጥቅማጥቅም ${benefit.title} በተሳካ ሁኔታ ተመዝግቧል እና በማህደር ተቀምጧል!` };
   };
 
   const addDisciplinaryRecord = async (policeId: string, record: Omit<DisciplinaryRecord, 'id'>): Promise<{ success: boolean; message: string }> => {
@@ -2126,7 +2163,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       approvalReference: record.verdictRef
     });
 
-    return { success: true, message: 'የዲሲፕሊን እርምጃው በተሳካ ሁኔታ ተመዝግቦ በፋየርስቶር ተቀምጧል!' };
+    return { success: true, message: 'የዲሲፕሊን እርምጃው በተሳካ ሁኔታ ተመዝግቦ በማህደር ተቀምጧል!' };
   };
 
   const addAwardRecord = async (policeId: string, award: Omit<AwardItem, 'id'>): Promise<{ success: boolean; message: string }> => {
@@ -2162,7 +2199,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       approvalReference: award.medalOrCertRef
     });
 
-    return { success: true, message: 'የክብር ሽልማቱ በተሳካ ሁኔታ ተመዝግቦ በፋየርስቶር ተቀምጧል!' };
+    return { success: true, message: 'የክብር ሽልማቱ በተሳካ ሁኔታ ተመዝግቦ በማህደር ተቀምጧል!' };
   };
 
   const uploadPersonnelDocument = async (
@@ -2301,7 +2338,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       success: true,
-      message: `የአገልግሎት ስንብትና የጡረታ ሰነድ በተሳካ ሁኔታ ተመዝግቦ በፋየርስቶር ተቀምጧል!`
+      message: `የአገልግሎት ስንብትና የጡረታ ሰነድ በተሳካ ሁኔታ ተመዝግቦ በማህደር ተቀምጧል!`
     };
   };
 
@@ -2511,11 +2548,11 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const markNotificationRead = (id: string) => {
-    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, isRead: true } : n)));
+    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, isRead: true, deliveryStatus: 'read' } : n)));
   };
 
   const markAllNotificationsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true, deliveryStatus: 'read' })));
   };
 
   // Authentication & Login Operations

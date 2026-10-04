@@ -97,6 +97,10 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
   // Step Increment & Rank Promotion Dates States
   const [nextStepDate, setNextStepDate] = useState(member.nextStepIncrementDate || '2026-12-01');
   const [nextPromoDate, setNextPromoDate] = useState(member.nextPromotionEligibilityDate || '2027-04-15');
+  const [lastPromoDate, setLastPromoDate] = useState(
+    member.lastPromotionDate || member.rankHistory?.[0]?.effectiveDate || '2023-04-15'
+  );
+  const [lastStepDate, setLastStepDate] = useState(member.lastStepIncrementDate || '2024-12-01');
 
   // Auto-dismiss feedback message after 4.5 seconds
   useEffect(() => {
@@ -115,9 +119,26 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
 
   const handleSaveStepAndPromoDates = async () => {
     setIsSubmitting(true);
-    const res = await updateMemberStepAndPromotionDates(member.policeId, nextStepDate, nextPromoDate);
+    const res = await updateMemberStepAndPromotionDates(
+      member.policeId,
+      nextStepDate,
+      nextPromoDate,
+      lastPromoDate,
+      lastStepDate
+    );
     setIsSubmitting(false);
     setFeedbackMessage({ type: res.success ? 'success' : 'error', text: res.message });
+  };
+
+  const handleAutoComputeFromLastPromo = (lastDate: string) => {
+    setLastPromoDate(lastDate);
+    if (lastDate) {
+      const d = new Date(lastDate);
+      if (!isNaN(d.getTime())) {
+        d.setFullYear(d.getFullYear() + 3);
+        setNextPromoDate(d.toISOString().substring(0, 10));
+      }
+    }
   };
 
   const handleAutoComputeDates = () => {
@@ -950,6 +971,119 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                     <span>{t('አዲስ ማዕረግ መዝግብ', 'Record Promotion')}</span>
                   </button>
                 )}
+              </div>
+
+              {/* Dedicated Rank & Step Promotion Dates Scheduler inside Rank Tab (Requested by User) */}
+              <div className="bg-slate-950/90 border border-amber-500/40 rounded-2xl p-5 shadow-lg space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                  <div>
+                    <h4 className="text-sm font-black text-amber-400 flex items-center gap-2">
+                      <Award className="w-4 h-4 text-amber-400" />
+                      <span>{t('የማዕረግ ማግኛ ጊዜና ያገኘበት ቀን ማስተዳደሪያ', 'Rank Acquisition & Next Promotion Eligibility Schedule')}</span>
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {t(
+                        'አድሚኑ አሁን ያለውን ማዕረግ ያገኘበትን ቀን ሲያስገባ ሲስተሙ ቀጣይ የሚያገኝበትን በራስ-ሰር ያዘጋጃል፤ ቀኑ ሲደርስ ለአባሉም ለአድሚኑም ኖቲፊኬሽን ይደርሳል!',
+                        'Enter last promotion date to auto-project next eligibility. Automated notifications are sent to both Admin and Officer upon due date.'
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAutoComputeFromLastPromo(lastPromoDate)}
+                      className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 text-xs font-bold rounded-xl border border-amber-500/40 flex items-center gap-1 transition-all"
+                      title={t('ከያዘበት ቀን ጀምሮ 3 ዓመት ጨምረህ አስላ', 'Auto-project +3 years tenure')}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{t('ቀጣዩን በአውቶማቲክ አስላ', 'Auto-Calculate Next Date')}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  {/* 1. አሁን ያለውን ማዕረግ ያገኘበት ቀን */}
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1">
+                      1. {t('አሁን ያለውን ማዕረግ ያገኘበት ቀን:', 'Current Rank Effective Date:')}
+                    </label>
+                    <input
+                      type="date"
+                      value={lastPromoDate}
+                      onChange={e => handleAutoComputeFromLastPromo(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-white font-mono font-bold"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                      {t('ያለፈው ማዕረግ የተሰጠበት ቀን', 'Date rank was awarded')}
+                    </span>
+                  </div>
+
+                  {/* 2. ቀጣይ ማዕረግ ማግኛ ጊዜ */}
+                  <div>
+                    <label className="text-amber-300 font-bold block mb-1">
+                      2. {t('ቀጣይ ማዕረግ ማግኛ ጊዜ (Eligibility):', 'Next Rank Eligibility Date:')}
+                    </label>
+                    <input
+                      type="date"
+                      value={nextPromoDate}
+                      onChange={e => setNextPromoDate(e.target.value)}
+                      className="w-full bg-slate-900 border border-amber-500/40 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono font-bold"
+                    />
+                    <span className="text-[10px] text-amber-400 mt-1 block">
+                      {t('ቀኑ ሲደርስ አውቶማቲክ ማንቂያ ይነሳል', 'Triggers dual notification alert')}
+                    </span>
+                  </div>
+
+                  {/* 3. ያለፈው እርከን የተሰጠበት ቀን */}
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1">
+                      3. {t('ያለፈው እርከን የተሰጠበት ቀን:', 'Last Step Increment Date:')}
+                    </label>
+                    <input
+                      type="date"
+                      value={lastStepDate}
+                      onChange={e => setLastStepDate(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                    />
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                      ደረጃ {member.salaryGrade} · እርከን {member.salaryStep}
+                    </span>
+                  </div>
+
+                  {/* 4. ቀጣይ እርከን ማግኛ ጊዜ */}
+                  <div>
+                    <label className="text-emerald-300 font-bold block mb-1">
+                      4. {t('ቀጣይ እርከን ማግኛ ጊዜ:', 'Next Step Increment Date:')}
+                    </label>
+                    <input
+                      type="date"
+                      value={nextStepDate}
+                      onChange={e => setNextStepDate(e.target.value)}
+                      className="w-full bg-slate-900 border border-emerald-500/40 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold"
+                    />
+                    <span className="text-[10px] text-emerald-400 mt-1 block">
+                      {t('የደመወዝ እርከን ጭማሪ ጊዜ', 'Salary step increment date')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                    <span>{t('ሴቭ ሲባል ለአባሉም ለአድሚኑም በኖቲፊኬሽን ይላካል', 'Saves to file & delivers notification to Admin and Officer')}</span>
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveStepAndPromoDates}
+                    disabled={isSubmitting}
+                    className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{t('የማዕረግ ቀናትን ሴቭ አድርግ', 'Save Promotion Dates')}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="relative pl-6 border-l-2 border-slate-700 space-y-6 my-4">
@@ -2123,7 +2257,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                         pensionEligible: sepPension,
                         pensionBookRef: sepPension ? sepPensionBook : undefined
                       });
-                      setFeedbackMessage({ type: 'success', text: res.message || 'የአገልግሎት ስንብትና ጡረታ ሰነድ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የአገልግሎት ስንብትና ጡረታ ሰነድ በማህደር በተሳካ ሁኔታ ተቀምጧል!' });
                       setActionModal(null);
                       setActiveTab('separation');
                     } catch (err: any) {
@@ -2135,7 +2269,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   className="px-4 py-1.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ስንብት አጽድቅና በፋየርስቶር አስቀምጥ', 'Execute Separation & Save to Firestore')}</span>
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ስንብት አጽድቅና በማህደር አስቀምጥ', 'Execute Separation & Save Dossier')}</span>
                 </button>
               </div>
             </div>
@@ -2367,7 +2501,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                         gradeOrScore: trGrade,
                         certificateRef: trCertRef
                       });
-                      setFeedbackMessage({ type: 'success', text: res.message || 'ስልጠናው በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'ስልጠናው በማህደር በተሳካ ሁኔታ ተቀምጧል!' });
                       setActionModal(null);
                     } catch (err: any) {
                       setFeedbackMessage({ type: 'error', text: err?.message || 'ስልጠናውን ማስቀመጥ አልተቻለም' });
@@ -2378,7 +2512,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ስልጠና መዝግብና በፋየርስቶር አስቀምጥ', 'Save Training to Firestore')}</span>
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ስልጠና መዝግብና በማህደር አስቀምጥ', 'Save Training to Dossier')}</span>
                 </button>
               </div>
             </div>
@@ -2531,7 +2665,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                         supervisorRank: evalSupRank,
                         date: new Date().toISOString().substring(0, 10)
                       });
-                      setFeedbackMessage({ type: 'success', text: res.message || 'የአፈጻጸም ምዘናው በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የአፈጻጸም ምዘናው በማህደር በተሳካ ሁኔታ ተቀምጧል!' });
                       setActionModal(null);
                     } catch (err: any) {
                       setFeedbackMessage({ type: 'error', text: err?.message || 'ምዘናውን ማስቀመጥ አልተቻለም' });
@@ -2542,7 +2676,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ምዘና መዝግብና በፋየርስቶር አስቀምጥ', 'Save Evaluation to Firestore')}</span>
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ምዘና መዝግብና በማህደር አስቀምጥ', 'Save Evaluation to Dossier')}</span>
                 </button>
               </div>
             </div>
@@ -2639,7 +2773,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                         approvedBy: 'የሰው ኃይል አስተዳደርና ልማት',
                         approvedDate: new Date().toISOString().substring(0, 10)
                       });
-                      setFeedbackMessage({ type: 'success', text: res.message || 'የእረፍት ፈቃዱ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የእረፍት ፈቃዱ በማህደር በተሳካ ሁኔታ ተቀምጧል!' });
                       setActionModal(null);
                     } catch (err: any) {
                       setFeedbackMessage({ type: 'error', text: err?.message || 'ፈቃዱን ማስቀመጥ አልተቻለም' });
@@ -2650,7 +2784,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ፈቃድ መዝግብና በፋየርስቶር አስቀምጥ', 'Save Leave to Firestore')}</span>
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ፈቃድ መዝግብና በማህደር አስቀምጥ', 'Save Leave to Dossier')}</span>
                 </button>
               </div>
             </div>
@@ -2760,7 +2894,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                         status: benStatus,
                         remarks: benRemarks
                       });
-                      setFeedbackMessage({ type: 'success', text: res.message || 'ጥቅማጥቅሙ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'ጥቅማጥቅሙ በማህደር በተሳካ ሁኔታ ተቀምጧል!' });
                       setActionModal(null);
                     } catch (err: any) {
                       setFeedbackMessage({ type: 'error', text: err?.message || 'ጥቅማጥቅሙን ማስቀመጥ አልተቻለም' });
@@ -2771,7 +2905,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ጥቅማጥቅም መዝግብና አስቀምጥ', 'Save Benefit to Firestore')}</span>
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ጥቅማጥቅም መዝግብና በማህደር አስቀምጥ', 'Save Benefit to Dossier')}</span>
                 </button>
               </div>
             </div>
@@ -2863,7 +2997,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                         verdictRef: discRef,
                         status: discStatus
                       });
-                      setFeedbackMessage({ type: 'success', text: res.message || 'የዲሲፕሊን እርምጃው በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የዲሲፕሊን እርምጃው በማህደር በተሳካ ሁኔታ ተቀምጧል!' });
                       setActionModal(null);
                     } catch (err: any) {
                       setFeedbackMessage({ type: 'error', text: err?.message || 'እርምጃውን ማስቀመጥ አልተቻለም' });
@@ -2874,7 +3008,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   className="px-4 py-1.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('እርምጃ መዝግብና አስቀምጥ', 'Save Record to Firestore')}</span>
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('እርምጃ መዝግብና በማህደር አስቀምጥ', 'Save Record to Dossier')}</span>
                 </button>
               </div>
             </div>
@@ -2965,7 +3099,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                         awardedBy: awdBy,
                         medalOrCertRef: awdRef
                       });
-                      setFeedbackMessage({ type: 'success', text: res.message || 'የክብር ሽልማቱ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+                      setFeedbackMessage({ type: 'success', text: res.message || 'የክብር ሽልማቱ በማህደር በተሳካ ሁኔታ ተቀምጧል!' });
                       setActionModal(null);
                     } catch (err: any) {
                       setFeedbackMessage({ type: 'error', text: err?.message || 'ሽልማቱን ማስቀመጥ አልተቻለም' });
@@ -2976,7 +3110,7 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ሽልማት መዝግብና አስቀምጥ', 'Save Award to Firestore')}</span>
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ሽልማት መዝግብና በማህደር አስቀምጥ', 'Save Award to Dossier')}</span>
                 </button>
               </div>
             </div>

@@ -402,6 +402,8 @@ export interface NotificationItem {
   type: 'application' | 'salary' | 'transfer' | 'rank' | 'training' | 'alert' | 'system';
   targetPoliceId?: string; // If null, general institutional alert
   linkTab?: string;
+  deliveredAt?: string;
+  deliveryStatus?: 'delivered' | 'read' | 'pending';
 }
 
 export interface AuditLogItem {

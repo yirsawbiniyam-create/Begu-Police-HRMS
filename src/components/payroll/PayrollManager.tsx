@@ -47,7 +47,7 @@ import {
 import { MemberPersonnelFileModal } from '../personnel/MemberPersonnelFileModal';
 import { OfficerSalaryAdjustmentModal } from './OfficerSalaryAdjustmentModal';
 import { HistoricalPayrollModal } from './HistoricalPayrollModal';
-import { calculateOfficerPayroll } from '../../utils/payrollCalculator';
+import { calculateOfficerPayroll, calculateMedicalContribution } from '../../utils/payrollCalculator';
 
 export const PayrollManager: React.FC = () => {
   const {
@@ -244,7 +244,11 @@ export const PayrollManager: React.FC = () => {
       setGeneralCreditLoan(custom?.generalCreditLoan || 0);
       setPersonalLoan(custom?.personalLoanDeduction || 0);
       setHivFund(custom?.hivFundDeduction || 0);
-      setMedical(custom?.medicalDeduction || custom?.healthInsuranceDeduction || 100);
+      setMedical(
+        custom?.medicalDeduction !== undefined
+          ? custom.medicalDeduction
+          : calculateMedicalContribution(custom?.customBaseSalary ?? m.baseSalary)
+      );
       setOtherDeduction(custom?.otherDeductions || 0);
     }
   };
@@ -1307,7 +1311,7 @@ export const PayrollManager: React.FC = () => {
               className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
             >
               <Save className="w-4 h-4" />
-              <span>{t('አስተካክለህ በፋየርስቶር ሴቭ አድርግ (Save to Payroll & Firestore)', 'Save Adjustment to Payroll')}</span>
+              <span>{t('አስተካክለህ በማህደር ሴቭ አድርግ (Save Adjustment to Payroll)', 'Save Adjustment to Payroll')}</span>
             </button>
           </form>
         </div>
@@ -1326,7 +1330,7 @@ export const PayrollManager: React.FC = () => {
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
                 {t(
-                  'ባለሙያው ለእያንዳንዱ ማዕረግና ደረጃ የመሰረታዊ ደመወዝ መጠን አስገብቶ የሚያስተካክልበት፤ በፋየርስቶር ተቀምጦ ለሁሉም አባላት የሚተገበር።',
+                  'ባለሙያው ለእያንዳንዱ ማዕረግና ደረጃ የመሰረታዊ ደመወዝ መጠን አስገብቶ የሚያስተካክልበት፤ በማዕከላዊ ማህደር ተቀምጦ ለሁሉም አባላት የሚተገበር።',
                   'HR Specialist can adjust grade/step base salaries and batch apply to all active officers.'
                 )}
               </p>
@@ -1349,7 +1353,7 @@ export const PayrollManager: React.FC = () => {
                     className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>{t('በፋየርስቶር አስቀምጥ', 'Save Matrix')}</span>
+                    <span>{t('ማትሪክስ አስቀምጥ', 'Save Matrix')}</span>
                   </button>
                 </>
               ) : (
@@ -1367,7 +1371,7 @@ export const PayrollManager: React.FC = () => {
           {scaleSaveStatus === 'saved' && (
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-emerald-400" />
-              <span>{t('የደመወዝ ስኬል ማትሪክስ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!', 'Salary scales saved to Firestore successfully!')}</span>
+              <span>{t('የደመወዝ ስኬል ማትሪክስ በማህደር በተሳካ ሁኔታ ተቀምጧል!', 'Salary scales saved successfully!')}</span>
             </div>
           )}
 
@@ -1453,14 +1457,14 @@ export const PayrollManager: React.FC = () => {
               className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg"
             >
               <Save className="w-4 h-4" />
-              <span>{t('ህግጋቱን በፋየርስቶር አስቀምጥ', 'Save Rules to Firestore')}</span>
+              <span>{t('ህግጋቱን አስቀምጥ', 'Save Deduction Rules')}</span>
             </button>
           </div>
 
           {rulesSaveStatus === 'saved' && (
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-emerald-400" />
-              <span>{t('የደመወዝ ህግጋት በፋየርስቶር በተሳካ ሁኔታ ተቀምጠዋል!', 'Deduction rules saved to Firestore successfully!')}</span>
+              <span>{t('የደመወዝ ህግጋት በማህደር በተሳካ ሁኔታ ተቀምጠዋል!', 'Deduction rules saved successfully!')}</span>
             </div>
           )}
 
@@ -1619,15 +1623,21 @@ export const PayrollManager: React.FC = () => {
 
                 {/* 7. Medical Contribution */}
                 <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
-                  <label className="text-[11px] text-slate-300 font-bold block mb-1">
-                    {t('የህክምና መዋጮ / መድህን', 'Medical Contribution')}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] text-slate-300 font-bold block">
+                      {t('የህክምና መዋጮ', 'Medical Contribution')}
+                    </label>
+                    <span className="text-[10px] text-amber-400 font-mono">15–50 ETB</span>
+                  </div>
                   <input
                     type="number"
                     value={medical}
                     onChange={e => setMedical(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white text-right focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white text-right focus:outline-none focus:border-amber-500 font-bold"
                   />
+                  <p className="text-[9px] text-slate-400 mt-1">
+                    &le;2000: 15 | 2001–5000: 25 | 5001–7500: 35 | 7501–11000: 40 | &gt;11000: 50
+                  </p>
                 </div>
 
                 {/* 8. Other Deductions */}
@@ -1725,7 +1735,7 @@ export const PayrollManager: React.FC = () => {
                   <span className="absolute right-3 top-2 text-xs text-slate-400">%</span>
                 </div>
                 <span className="text-[10px] text-slate-500 mt-1 block">
-                  {t('የተቋሙ ድርሻ 11% ነው', 'Institutional employer share is 11%')}
+                  {t('በመንግስት/በተቋሙ የሚሸፈነው የጡረታ ድርሻ 33% ነው', 'Statutory government/employer share is 33%')}
                 </span>
               </div>
             </div>

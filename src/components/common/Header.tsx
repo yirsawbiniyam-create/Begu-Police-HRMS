@@ -123,9 +123,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
                   {isMemberSession ? t('የአባላት Self-Service ፖርታል', 'Member Self-Service Portal') : t('HRM & Self-Service', 'Official HRMS Portal')}
                 </span>
                 <span className="text-slate-400 text-xs hidden md:inline">·</span>
-                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
-                  <Cloud className="w-3 h-3 text-emerald-400" />
-                  <span>{t('በፋየርስቶር በቀጥታ ይቀመጣል (Firestore DB)', 'Cloud Firestore Live Sync')}</span>
+                <span className="inline-flex items-center gap-1 text-[11px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 font-medium">
+                  <Shield className="w-3 h-3 text-amber-400" />
+                  <span>{t('ደህንነቱ የተጠበቀ ይፋዊ ሲስተም', 'Official Secure HRMS')}</span>
                 </span>
               </div>
               <h1 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
@@ -283,17 +283,29 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <span className="font-semibold text-slate-100 flex items-center gap-1">
+                            <span className="font-semibold text-slate-100 flex items-center gap-1.5">
                               {n.type === 'alert' ? (
                                 <AlertTriangle className="w-3.5 h-3.5 text-amber-400 inline flex-shrink-0" />
                               ) : (
                                 <Sparkles className="w-3.5 h-3.5 text-blue-400 inline flex-shrink-0" />
                               )}
-                              {n.title}
+                              <span>{n.title}</span>
                             </span>
                             <span className="text-[10px] text-slate-400 whitespace-nowrap">{n.date.split(' ')[0]}</span>
                           </div>
                           <p className="text-slate-300 mt-1 text-[11px] leading-relaxed">{n.message}</p>
+                          <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-800/60 text-[10px]">
+                            <span className="text-slate-400 font-mono">{n.date}</span>
+                            <span className={`inline-flex items-center gap-1 font-semibold ${
+                              n.isRead || n.deliveryStatus === 'read' ? 'text-emerald-400' : 'text-amber-400'
+                            }`}>
+                              {n.isRead || n.deliveryStatus === 'read' ? (
+                                <span>✓✓ {t('ታይቷል (Read)', 'Read')}</span>
+                              ) : (
+                                <span>✓ {t('ደርሷል (Delivered)', 'Delivered')}</span>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       ))
                     )}

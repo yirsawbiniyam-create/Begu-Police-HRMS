@@ -63,7 +63,7 @@ export const SeparationManager: React.FC = () => {
         pensionEligible,
         pensionBookRef: pensionEligible ? pensionBookRef : undefined
       });
-      setFeedbackMessage({ type: 'success', text: res.message || 'የአገልግሎት ስንብትና ጡረታ ሰነድ በፋየርስቶር በተሳካ ሁኔታ ተቀምጧል!' });
+      setFeedbackMessage({ type: 'success', text: res.message || 'የአገልግሎት ስንብትና ጡረታ ሰነድ በማህደር በተሳካ ሁኔታ ተቀምጧል!' });
       setShowProcessModal(false);
       setTargetMemberForSeparation(null);
       setSelectedPoliceIdForModal('');
@@ -380,7 +380,7 @@ export const SeparationManager: React.FC = () => {
                   className="px-5 py-2 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving to Firestore...') : t('ስንብት አጽድቅና በፋየርስቶር አስቀምጥ', 'Execute Separation & Save to Firestore')}</span>
+                  <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ስንብት አጽድቅና በማህደር አስቀምጥ', 'Execute Separation & Save Dossier')}</span>
                 </button>
               </div>
             </form>
