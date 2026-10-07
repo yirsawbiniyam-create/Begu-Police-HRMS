@@ -210,6 +210,45 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onLoginSuccess }) => {
                 )}
               </button>
             </form>
+
+            {/* Quick Login Presets for Smooth Access */}
+            <div className="mt-5 pt-4 border-t border-slate-800 text-center">
+              <span className="text-[10px] text-slate-400 block mb-2 font-mono uppercase tracking-wider">
+                {t('ፈጣን የመግቢያ አማራጮች (Quick Access Roles):', 'Quick Demo Accounts:')}
+              </span>
+              <div className="flex flex-wrap items-center justify-center gap-1.5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsername('admin');
+                    setPassword('admin@2026');
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all font-semibold"
+                >
+                  👑 Admin (admin)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsername('payroll');
+                    setPassword('payroll@2026');
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-all font-semibold"
+                >
+                  💰 Payroll (payroll)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsername('BG-000101');
+                    setPassword('Police@2026');
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 transition-all font-semibold"
+                >
+                  👮 Member (BG-000101)
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -217,7 +256,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onLoginSuccess }) => {
       {/* Footer */}
       <footer className="py-4 text-center border-t border-slate-800/60 text-[11px] text-slate-500 font-mono relative z-10">
         <p>
-          © 2026 {t('የቤኒሻንጉል ጉሙዝ ክልል ፖሊስ ኮሚሽን', 'Benishangul Gumuz Regional Police Commission')} · {t('ደህንነቱ የተጠበቀ ይፋዊ ሲስተም', 'Official Secure HRMS')}
+          © 2026 {t('የቤኒሻንጉል ጉሙዝ ክልል ፖሊስ ኮሚሽን', 'Benishangul Gumuz Regional Police Commission')} · {t('የሰው ኃይል ልማት አስተዳደር', 'Police HRMS')}
         </p>
       </footer>
     </div>

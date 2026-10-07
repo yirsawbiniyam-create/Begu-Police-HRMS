@@ -351,63 +351,6 @@ export const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ onNavi
         </div>
       )}
 
-      {/* Commission Branding & Cloud Logo Management Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-850 border border-slate-800 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <div className="w-14 h-14 rounded-2xl bg-slate-950 border-2 border-amber-500/40 p-1 flex items-center justify-center shadow-lg shadow-amber-500/10 overflow-hidden">
-              {systemLogo ? (
-                <img
-                  src={systemLogo}
-                  alt="Commission Logo"
-                  className="w-full h-full object-contain rounded-xl"
-                />
-              ) : (
-                <Shield className="w-7 h-7 text-amber-400 fill-amber-400/20" />
-              )}
-            </div>
-            <div
-              className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-900 ${
-                isLogoSynced ? 'bg-emerald-500' : 'bg-amber-400'
-              }`}
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs uppercase tracking-wider font-bold text-amber-400">
-                {t('የቤኒሻንጉል ጉሙዝ ክልል ፖሊስ ኮሚሽን', 'Benishangul Gumuz Police Commission')}
-              </span>
-              <span className="text-slate-600 hidden sm:inline">·</span>
-              <span className="inline-flex items-center gap-1 text-[11px] text-amber-300 font-medium">
-                <Shield className="w-3 h-3 text-amber-400" />
-                <span>{t('ዋና መምሪያ - አሶሳ', 'Headquarters - Assosa')}</span>
-              </span>
-            </div>
-            <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
-              {t('የሲስተም ሎጎና የኮሚሽኑ ይፋዊ ብራንዲንግ', 'Commission Official Logo & System Branding')}
-            </h3>
-            <p className="text-xs text-slate-400">
-              {t(
-                'አድሚኑ የሚያስገባው ሎጎ ለሁሉም የፖሊስ አባላት በSelf-Service ፖርታል፣ በመግቢያ ገጽ እና በደመወዝ ፔይስሊፕ ላይ በቀጥታ ይታያል።',
-                'Custom logo uploaded by the Admin syncs in real-time to all member portals, payslips, and login screens.'
-              )}
-            </p>
-          </div>
-        </div>
-
-        {(currentRole === 'hr_admin' || currentRole === 'management') && (
-          <button
-            type="button"
-            onClick={() => setShowLogoModal(true)}
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-md active:scale-95 whitespace-nowrap cursor-pointer"
-          >
-            <Camera className="w-4 h-4" />
-            <span>{t('ከጋለሪ ሎጎ ቀይር / Upload Logo', 'Upload Logo from Gallery')}</span>
-          </button>
-        )}
-      </div>
-
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {/* Total Police Force */}
@@ -962,7 +905,7 @@ export const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ onNavi
                       outerRadius={75}
                       paddingAngle={4}
                       dataKey="value"
-                      label={({ name, value }) => `${name.split(' ')[0]}: ${value}`}
+                      label={({ name, value }) => `${(name || '').split(' ')[0]}: ${value}`}
                       labelLine={false}
                     >
                       <Cell fill="#3b82f6" />

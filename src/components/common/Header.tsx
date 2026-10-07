@@ -122,11 +122,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
                 <span className="text-xs text-slate-400 hidden sm:inline">
                   {isMemberSession ? t('የአባላት Self-Service ፖርታል', 'Member Self-Service Portal') : t('HRM & Self-Service', 'Official HRMS Portal')}
                 </span>
-                <span className="text-slate-400 text-xs hidden md:inline">·</span>
-                <span className="inline-flex items-center gap-1 text-[11px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 font-medium">
-                  <Shield className="w-3 h-3 text-amber-400" />
-                  <span>{t('ደህንነቱ የተጠበቀ ይፋዊ ሲስተም', 'Official Secure HRMS')}</span>
-                </span>
               </div>
               <h1 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 <span>{t('የቤጉ ፖሊስ ዲጂታል የሰው ኃይል አስተዳደር', 'Begu Police Digital HRMS')}</span>

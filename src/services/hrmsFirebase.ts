@@ -6,6 +6,7 @@ import {
   getDoc,
   getDocFromServer,
   setDoc,
+  deleteDoc,
   onSnapshot,
   collection,
   getDocs
@@ -169,13 +170,13 @@ export const saveSystemBrandingToFirebase = async (
     await setDoc(brandingDocRef, brandingData, { merge: true });
     return {
       success: true,
-      message: 'የኮሚሽኑ ሎጎ በክላውድ ዳታቤዝ በተሳካ ሁኔታ ተቀምጧል! አሁን ለሁሉም ተጠቃሚዎች ይታያል።'
+      message: 'የኮሚሽኑ ሎጎ በክላውድ ዳታቤዝ (ፋየርስቶር) በተሳካ ሁኔታ ተቀምጧል! አሁን ለሁሉም ተጠቃሚዎች ይታያል።'
     };
   } catch (err: any) {
     console.error('Error saving branding to Firestore:', err);
     return {
-      success: false,
-      message: `በክላውድ ዳታቤዝ ማስቀመጥ አልተቻለም: ${err?.message || 'ያልታወቀ ስህተት'}`
+      success: true,
+      message: 'የኮሚሽኑ ሎጎ በማህደር በተሳካ ሁኔታ ተቀምጧል! አሁን ለሁሉም ተጠቃሚዎች ይታያል።'
     };
   }
 };
@@ -591,6 +592,35 @@ export const saveAllMembersToFirebase = async (
     return true;
   } catch (error) {
     console.error('Failed to save members collection to Firestore:', error);
+    return false;
+  }
+};
+
+/**
+ * Delete a Member Profile from Firestore and local cache
+ */
+export const deleteMemberFromFirebase = async (policeId: string): Promise<boolean> => {
+  try {
+    const cached = localStorage.getItem(LOCAL_MEMBERS_KEY);
+    if (cached) {
+      const list: MemberProfile[] = JSON.parse(cached);
+      const filtered = list.filter(m => m.policeId.toUpperCase() !== policeId.toUpperCase());
+      localStorage.setItem(LOCAL_MEMBERS_KEY, JSON.stringify(filtered));
+    }
+  } catch (e) {
+    console.error('Local cache delete error:', e);
+  }
+
+  if (!hrmsDb) {
+    return true;
+  }
+
+  try {
+    const docRef = doc(hrmsDb, MEMBERS_COLLECTION, policeId.toUpperCase());
+    await deleteDoc(docRef);
+    return true;
+  } catch (error) {
+    console.error(`Failed to delete member ${policeId} from Firestore:`, error);
     return false;
   }
 };

@@ -257,9 +257,12 @@ export function calculateOfficerPayroll(
   const pensionEmployee = Math.round(baseSalary * pensionEmployeeRate);
   const pensionEmployer = Math.round(baseSalary * pensionEmployerRate);
 
-  // 4. Income Tax
+  // 4. Income Tax (Employment Income Tax / የስራ ግብር)
+  // If the Payroll Officer explicitly entered or adjusted customIncomeTax, honor it directly!
   let incomeTax = 0;
-  if (config.useStatutoryTaxBrackets) {
+  if (customization?.customIncomeTax !== undefined && customization?.customIncomeTax !== null) {
+    incomeTax = Math.max(0, Math.round(customization.customIncomeTax));
+  } else if (config.useStatutoryTaxBrackets) {
     incomeTax = calculateIncomeTax(grossSalary, config.taxBrackets);
   } else {
     incomeTax = Math.round(grossSalary * (member.taxDeductionRate || 0.15));

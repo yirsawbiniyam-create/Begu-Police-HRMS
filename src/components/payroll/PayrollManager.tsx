@@ -33,7 +33,8 @@ import {
   ArrowRight,
   TrendingUp,
   MapPin,
-  Shield
+  Shield,
+  Percent
 } from 'lucide-react';
 import {
   MemberProfile,
@@ -120,6 +121,8 @@ export const PayrollManager: React.FC = () => {
   const [hivFund, setHivFund] = useState<number>(0);
   const [medical, setMedical] = useState<number>(0);
   const [otherDeduction, setOtherDeduction] = useState<number>(0);
+  const [incomeTaxAdj, setIncomeTaxAdj] = useState<number>(0);
+  const [hasIncomeTaxOverride, setHasIncomeTaxOverride] = useState<boolean>(false);
   const [dedAdjStatus, setDedAdjStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Editable scales local state for tab 4
@@ -250,6 +253,15 @@ export const PayrollManager: React.FC = () => {
           : calculateMedicalContribution(custom?.customBaseSalary ?? m.baseSalary)
       );
       setOtherDeduction(custom?.otherDeductions || 0);
+
+      if (custom?.customIncomeTax !== undefined && custom.customIncomeTax !== null) {
+        setIncomeTaxAdj(custom.customIncomeTax);
+        setHasIncomeTaxOverride(true);
+      } else {
+        const calc = calculateOfficerPayroll(m, payrollConfig, custom);
+        setIncomeTaxAdj(calc.deductions.incomeTax);
+        setHasIncomeTaxOverride(false);
+      }
     }
   };
 
@@ -266,7 +278,8 @@ export const PayrollManager: React.FC = () => {
       personalLoanDeduction: personalLoan,
       hivFundDeduction: hivFund,
       medicalDeduction: medical,
-      otherDeductions: otherDeduction
+      otherDeductions: otherDeduction,
+      customIncomeTax: hasIncomeTaxOverride ? incomeTaxAdj : null
     });
 
     if (res.success) {
@@ -1654,6 +1667,52 @@ export const PayrollManager: React.FC = () => {
                 </div>
               </div>
 
+              {/* 9. Employment Income Tax (የስራ ግብር ማስተካከያ) */}
+              <div className="p-3.5 bg-slate-900 border border-amber-500/30 rounded-xl space-y-2 text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Percent className="w-4 h-4 text-amber-400" />
+                    <span className="font-bold text-amber-400">
+                      {t('የስራ ግብር ማስተካከያ (Employment Income Tax):', 'Employment Income Tax Customization:')}
+                    </span>
+                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hasIncomeTaxOverride}
+                      onChange={e => setHasIncomeTaxOverride(e.target.checked)}
+                      className="rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-amber-400"
+                    />
+                    <span className="font-semibold text-amber-300 text-[11px]">
+                      {t('የስራ ግብርን በማኑዋል አስተካክል / Manual Tax Override', 'Manual Tax Override')}
+                    </span>
+                  </label>
+                </div>
+
+                {hasIncomeTaxOverride ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-48 relative">
+                      <input
+                        type="number"
+                        value={incomeTaxAdj}
+                        onChange={e => setIncomeTaxAdj(Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="w-full bg-slate-950 border border-amber-400 rounded-lg pl-3 pr-12 py-1.5 text-xs font-mono font-bold text-amber-300 focus:outline-none"
+                      />
+                      <span className="absolute right-3 top-1.5 text-xs text-amber-400 font-bold">ETB</span>
+                    </div>
+                    <span className="text-[11px] text-slate-400">
+                      {t('ፔሮል ኦፊሰሩ ያስተካከለው ይህ የስራ ግብር መጠን በፔሮል TAX አምድ ላይ ሴቭ ሲል በቀጥታ ይሰራል', 'Custom tax value applied to TAX column on save')}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 flex items-center gap-2">
+                    <span>{t('በህግ ቀመር መሰረት የተሰላ መደበኛ ግብር:', 'Standard calculated tax:')}</span>
+                    <span className="font-mono font-bold text-emerald-400">{incomeTaxAdj.toLocaleString()} ETB</span>
+                    <span className="text-[10px] text-slate-500">({t('በማኑዋል ለማስተካከል ምልክት ያድርጉ', 'Check to override manually')})</span>
+                  </p>
+                )}
+              </div>
+
               {/* Total Other Deduction Preview */}
               <div className="p-3 bg-slate-900 rounded-xl flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-300">
@@ -1759,18 +1818,43 @@ export const PayrollManager: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 font-mono text-slate-300">
-                  {localRules.taxBrackets.map(b => (
+                  {localRules.taxBrackets.map((b, idx) => (
                     <tr key={b.id} className="hover:bg-slate-900/50">
                       <td className="py-2 px-3 font-semibold text-white">
                         {b.maxIncome === null
                           ? `ከ ${b.minIncome.toLocaleString()} ብር በላይ`
                           : `${b.minIncome.toLocaleString()} – ${b.maxIncome.toLocaleString()} ብር`}
                       </td>
-                      <td className="py-2 px-3 text-right font-bold text-amber-400">
-                        {(b.rate * 100).toFixed(0)}%
+                      <td className="py-2 px-3 text-right">
+                        <div className="inline-flex items-center gap-1 justify-end">
+                          <input
+                            type="number"
+                            step="1"
+                            value={Math.round(b.rate * 100)}
+                            onChange={e => {
+                              const newRate = (parseFloat(e.target.value) || 0) / 100;
+                              const updatedBrackets = [...localRules.taxBrackets];
+                              updatedBrackets[idx] = { ...b, rate: newRate };
+                              setLocalRules({ ...localRules, taxBrackets: updatedBrackets });
+                            }}
+                            className="w-16 bg-slate-900 border border-slate-700 focus:border-amber-400 rounded px-2 py-1 text-right text-xs font-mono font-bold text-amber-400"
+                          />
+                          <span className="text-slate-400 font-mono">%</span>
+                        </div>
                       </td>
                       <td className="py-2 px-3 text-right">
-                        {b.deduction.toLocaleString()} ETB
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={b.deduction}
+                          onChange={e => {
+                            const newDed = parseFloat(e.target.value) || 0;
+                            const updatedBrackets = [...localRules.taxBrackets];
+                            updatedBrackets[idx] = { ...b, deduction: newDed };
+                            setLocalRules({ ...localRules, taxBrackets: updatedBrackets });
+                          }}
+                          className="w-24 bg-slate-900 border border-slate-700 focus:border-amber-400 rounded px-2 py-1 text-right text-xs font-mono text-white"
+                        />
                       </td>
                       <td className="py-2 px-3 text-right text-slate-400 font-sans text-[11px]">
                         {b.rate === 0
@@ -1781,6 +1865,18 @@ export const PayrollManager: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+              <span>{t('ማስታወሻ፡ የግብር ምጣኔውንና ተቀናሹን ካስተካከሉ በኋላ ከላይ ያለውን "ህግጋቱን አስቀምጥ" ቁልፍ በመጫን በዳታቤዝ ሴቭ ያድርጉ።', 'Note: After modifying tax brackets or deductions, click "Save Deduction Rules" above to save.')}</span>
+              <button
+                type="button"
+                onClick={handleSaveRulesToFirestore}
+                className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-[11px] flex items-center gap-1 shadow"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{t('የግብር ህግጋቱን ሴቭ አድርግ', 'Save Tax Rules')}</span>
+              </button>
             </div>
           </div>
         </div>

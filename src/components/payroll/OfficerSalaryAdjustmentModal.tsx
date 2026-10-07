@@ -114,6 +114,14 @@ export const OfficerSalaryAdjustmentModal: React.FC<OfficerSalaryAdjustmentModal
     existingCustom?.otherDeductions ?? 0
   );
 
+  // የስራ ግብር (Employment Income Tax Custom Adjustment)
+  const [useCustomTax, setUseCustomTax] = useState<boolean>(
+    existingCustom?.customIncomeTax !== undefined && existingCustom?.customIncomeTax !== null
+  );
+  const [customIncomeTax, setCustomIncomeTax] = useState<number>(
+    existingCustom?.customIncomeTax ?? 0
+  );
+
   const [healthFundDeduction, setHealthFundDeduction] = useState<number>(
     existingCustom?.healthInsuranceDeduction ?? 100
   );
@@ -186,6 +194,7 @@ export const OfficerSalaryAdjustmentModal: React.FC<OfficerSalaryAdjustmentModal
     hivFundDeduction,
     medicalDeduction,
     otherDeductions,
+    customIncomeTax: useCustomTax ? customIncomeTax : null,
     healthInsuranceDeduction: medicalDeduction,
     redCrossDeduction,
     courtOrDisciplinaryPenalty: courtPenalty,
@@ -625,6 +634,60 @@ export const OfficerSalaryAdjustmentModal: React.FC<OfficerSalaryAdjustmentModal
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-slate-500"
                   />
                 </div>
+              </div>
+
+              {/* Employment Income Tax Override / የስራ ግብር ማስተካከያ (Requested by user) */}
+              <div className="p-3.5 bg-slate-900/90 border border-amber-500/30 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Percent className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-bold text-amber-400">
+                      {t('የስራ ግብር ማስተካከያ (Employment Income Tax):', 'Employment Income Tax Customization:')}
+                    </span>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useCustomTax}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setUseCustomTax(checked);
+                        if (checked && customIncomeTax <= 0) {
+                          setCustomIncomeTax(liveCalculation.deductions.incomeTax);
+                        }
+                      }}
+                      className="rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-amber-400"
+                    />
+                    <span className="font-semibold text-amber-300">
+                      {t('በማኑዋል ግብር አስተካክል / Manual Override', 'Manual Tax Override')}
+                    </span>
+                  </label>
+                </div>
+
+                {useCustomTax ? (
+                  <div className="flex items-center gap-3 pt-1">
+                    <div className="flex-1 max-w-xs">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={customIncomeTax}
+                          onChange={e => setCustomIncomeTax(Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-full bg-slate-950 border border-amber-400 rounded-lg pl-3 pr-12 py-1.5 text-xs font-mono font-bold text-amber-300 focus:outline-none"
+                        />
+                        <span className="absolute right-3 top-1.5 text-xs text-amber-400 font-bold">ETB</span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-slate-400">
+                      {t('ኦፊሰሩ ያስተካከለው ይህ የስራ ግብር መጠን በፔሮል ላይ በቀጥታ ይሰራል', 'Custom tax value will override standard formula')}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 flex items-center gap-2 pt-0.5">
+                    <span>{t('በህግ ቀመር መሰረት የተሰላ መደበኛ ግብር:', 'Standard statutory tax:')}</span>
+                    <span className="font-mono font-bold text-emerald-400">{liveCalculation.deductions.incomeTax.toLocaleString()} ETB</span>
+                    <span className="text-[10px] text-slate-500">({t('አስፈላጊ ሲሆን በማኑዋል ማስተካከል ይችላሉ', 'Toggle override to edit')})</span>
+                  </p>
+                )}
               </div>
 
               <div className="pt-2 border-t border-slate-800">

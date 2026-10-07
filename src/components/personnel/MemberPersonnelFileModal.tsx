@@ -40,19 +40,24 @@ import {
   AlertCircle,
   ChevronRight,
   Sparkles,
-  Save
+  Save,
+  Edit3,
+  Trash2,
+  X
 } from 'lucide-react';
 
 interface MemberPersonnelFileModalProps {
   member: MemberProfile;
   onClose: () => void;
   initialTab?: string;
+  initialActionModal?: string;
 }
 
 export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> = ({
   member: initialMember,
   onClose,
-  initialTab = 'overview'
+  initialTab = 'overview',
+  initialActionModal = null
 }) => {
   const {
     currentRole,
@@ -75,14 +80,16 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
     getMemberByPoliceId,
     updateMemberDutyStation,
     updateMemberStepAndPromotionDates,
-    applyStepIncrement
+    applyStepIncrement,
+    updateMemberProfile,
+    deleteMember
   } = useHrms();
 
   // Always use the freshest member state from HrmsContext so newly added items show up immediately!
   const member = getMemberByPoliceId(initialMember.policeId) || initialMember;
 
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [actionModal, setActionModal] = useState<string | null>(null);
+  const [actionModal, setActionModal] = useState<string | null>(initialActionModal);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -101,6 +108,106 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
     member.lastPromotionDate || member.rankHistory?.[0]?.effectiveDate || '2023-04-15'
   );
   const [lastStepDate, setLastStepDate] = useState(member.lastStepIncrementDate || '2024-12-01');
+
+  // Full Profile Edit States (Admin management - Address, Responsibility, Rank, etc.)
+  const [editFullNameAm, setEditFullNameAm] = useState(member.identity.fullName);
+  const [editFullNameEn, setEditFullNameEn] = useState(member.identity.fullNameEn || '');
+  const [editPosition, setEditPosition] = useState(member.position);
+  const [editRank, setEditRank] = useState<PoliceRank>(member.currentRank);
+  const [editDepartment, setEditDepartment] = useState<DepartmentName>(member.currentDepartment);
+  const [editStation, setEditStation] = useState<StationLocation>(member.currentStation);
+  const [editPhone, setEditPhone] = useState(member.identity.phone || '');
+  const [editRegion, setEditRegion] = useState(member.identity.address.region || 'ቤኒሻንጉል ጉሙዝ');
+  const [editZone, setEditZone] = useState(member.identity.address.zone || 'አሶሳ ዞን');
+  const [editWereda, setEditWereda] = useState(member.identity.address.wereda || 'አሶሳ ወረዳ');
+  const [editKebele, setEditKebele] = useState(member.identity.address.kebele || 'ቀበሌ 03');
+  const [editDutyStation, setEditDutyStation] = useState(member.dutyStationAddress || '');
+  const [editIsCommission, setEditIsCommission] = useState(member.isCommissionStaff ?? true);
+  const [editEmergencyName, setEditEmergencyName] = useState(member.identity.emergencyContact.name || '');
+  const [editEmergencyPhone, setEditEmergencyPhone] = useState(member.identity.emergencyContact.phone || '');
+  const [deleteReason, setDeleteReason] = useState('');
+
+  // Sync state when member changes
+  useEffect(() => {
+    setEditFullNameAm(member.identity.fullName);
+    setEditFullNameEn(member.identity.fullNameEn || '');
+    setEditPosition(member.position);
+    setEditRank(member.currentRank);
+    setEditDepartment(member.currentDepartment);
+    setEditStation(member.currentStation);
+    setEditPhone(member.identity.phone || '');
+    setEditRegion(member.identity.address.region || 'ቤኒሻንጉል ጉሙዝ');
+    setEditZone(member.identity.address.zone || 'አሶሳ ዞን');
+    setEditWereda(member.identity.address.wereda || 'አሶሳ ወረዳ');
+    setEditKebele(member.identity.address.kebele || 'ቀበሌ 03');
+    setEditDutyStation(member.dutyStationAddress || '');
+    setEditIsCommission(member.isCommissionStaff ?? true);
+    setEditEmergencyName(member.identity.emergencyContact.name || '');
+    setEditEmergencyPhone(member.identity.emergencyContact.phone || '');
+  }, [member]);
+
+  const handleSaveMemberEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const res = await updateMemberProfile(member.policeId, {
+        currentRank: editRank,
+        currentDepartment: editDepartment,
+        currentStation: editStation,
+        position: editPosition.trim(),
+        dutyStationAddress: editDutyStation.trim(),
+        isCommissionStaff: editIsCommission,
+        identity: {
+          ...member.identity,
+          fullName: editFullNameAm.trim(),
+          fullNameEn: editFullNameEn.trim(),
+          phone: editPhone.trim(),
+          rankAm: editRank,
+          responsibilityAm: editPosition.trim(),
+          address: {
+            region: editRegion.trim(),
+            zone: editZone.trim(),
+            wereda: editWereda.trim(),
+            kebele: editKebele.trim()
+          },
+          emergencyContact: {
+            ...member.identity.emergencyContact,
+            name: editEmergencyName.trim(),
+            phone: editEmergencyPhone.trim()
+          }
+        }
+      });
+      setIsSubmitting(false);
+      if (res.success) {
+        setFeedbackMessage({ type: 'success', text: res.message });
+        setActionModal(null);
+      } else {
+        setFeedbackMessage({ type: 'error', text: res.message });
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setFeedbackMessage({ type: 'error', text: err?.message || 'ማስተካከል አልተቻለም' });
+    }
+  };
+
+  const handleDeleteMember = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await deleteMember(member.policeId, deleteReason);
+      setIsSubmitting(false);
+      if (res.success) {
+        setFeedbackMessage({ type: 'success', text: res.message });
+        setTimeout(() => {
+          onClose();
+        }, 1200);
+      } else {
+        setFeedbackMessage({ type: 'error', text: res.message });
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setFeedbackMessage({ type: 'error', text: err?.message || 'ማጥፋት አልተቻለም' });
+    }
+  };
 
   // Auto-dismiss feedback message after 4.5 seconds
   useEffect(() => {
@@ -647,6 +754,25 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                 <LogOut className="w-3 h-3" />
                 <span>{t('+ ስንብት/ጡረታ', '+ Separation')}</span>
               </button>
+
+              {(currentRole === 'hr_admin' || currentRole === 'management') && (
+                <>
+                  <button
+                    onClick={() => setActionModal('edit_profile')}
+                    className="px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-black flex items-center gap-1 whitespace-nowrap shadow-sm transition-all ml-1"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>{t('✏️ መረጃ አርትዕ', 'Edit Profile')}</span>
+                  </button>
+                  <button
+                    onClick={() => setActionModal('delete_member')}
+                    className="px-2.5 py-1 rounded-md bg-rose-600/30 hover:bg-rose-600 text-rose-200 hover:text-white text-[11px] font-bold border border-rose-500/40 flex items-center gap-1 whitespace-nowrap transition-colors shadow-sm ml-auto"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>{t('🗑️ አባል ሰርዝ', 'Delete Member')}</span>
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -745,10 +871,22 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
               {/* Personal & Employment Details */}
               <div className="lg:col-span-2 space-y-4">
                 <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5" />
-                    {t('የአባሉ የግልና የአድራሻ መረጃ (Authoritative from ID System)', 'Personal & Address Information')}
-                  </h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5" />
+                      {t('የአባሉ የግልና የአድራሻ መረጃ', 'Personal & Address Information')}
+                    </h4>
+                    {(currentRole === 'hr_admin' || currentRole === 'management') && (
+                      <button
+                        type="button"
+                        onClick={() => setActionModal('edit_profile')}
+                        className="px-2 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>{t('አድራሻ አርትዕ', 'Edit Address')}</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                     <div>
                       <span className="text-slate-400 block">{t('ጾታ', 'Gender')}</span>
@@ -800,8 +938,20 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block">{t('የስራ መደብ', 'Position')}</span>
-                      <span className="font-semibold text-white">{member.position}</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 block">{t('የስራ ሃላፊነት / መደብ', 'Job Responsibility / Position')}</span>
+                        {(currentRole === 'hr_admin' || currentRole === 'management') && (
+                          <button
+                            type="button"
+                            onClick={() => setActionModal('edit_profile')}
+                            className="text-amber-400 hover:text-amber-300 text-[10px] font-bold flex items-center gap-0.5"
+                          >
+                            <Edit3 className="w-2.5 h-2.5" />
+                            <span>{t('አርትዕ', 'Edit')}</span>
+                          </button>
+                        )}
+                      </div>
+                      <span className="font-bold text-white block mt-0.5">{member.position}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 block">{t('የደመወዝ እርከን', 'Salary Grade & Step')}</span>
@@ -3111,6 +3261,310 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ሽልማት መዝግብና በማህደር አስቀምጥ', 'Save Award to Dossier')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 12. Admin Full Profile Edit Modal (Custom Address, Job Responsibility, etc.) */}
+        {actionModal === 'edit_profile' && (
+          <div className="fixed inset-0 z-60 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8 max-h-[90vh] overflow-y-auto text-xs">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-amber-500/10 rounded-xl text-amber-400 border border-amber-500/20">
+                    <Edit3 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white">
+                      {t('የአባሉን ማህደርና የስራ መረጃ አርትዕ', 'Edit Member Profile & Responsibilities')}
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      {member.policeId} · {member.identity.fullName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActionModal(null)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveMemberEdit} className="space-y-4">
+                {/* 1. Job Responsibility / Position (Custom entry by admin) */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-amber-500/30 space-y-2">
+                  <label className="block text-slate-200 font-bold">
+                    ⭐ {t('የስራ ሃላፊነት / የስራ መደብ (በአድሚኑ በነፃነት የሚሞላ) *', 'Job Responsibility / Role (Admin Custom Entry) *')}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editPosition}
+                    onChange={e => setEditPosition(e.target.value)}
+                    placeholder="ለምሳሌ፡ የመረጃና ምርመራ መኮንን፣ የህዝብ ግንኙነት ኃላፊ..."
+                    className="w-full bg-slate-900 border border-amber-400 rounded-lg px-3 py-2 text-white font-bold focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    {t('አድሚኑ ማንኛውንም የስራ ሃላፊነት በራሱ ፍላጎት በፅሁፍ እያስገባ ሴቭ ማድረግ ይችላል።', 'Enter any custom job role or title freely.')}
+                  </p>
+                </div>
+
+                {/* 2. Official Duty Station & Commission Status */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                  <label className="block text-slate-200 font-bold">
+                    ⭐ {t('ይፋዊ የስራ ቦታ አድራሻ (Duty Station Address - በነፃነት የሚሞላ):', 'Official Duty Station Address:')}
+                  </label>
+                  <input
+                    type="text"
+                    value={editDutyStation}
+                    onChange={e => setEditDutyStation(e.target.value)}
+                    placeholder="ለምሳሌ፡ የቤኒሻንጉል ጉሙዝ ፖሊስ ኮሚሽን ዋና መምሪያ - አሶሳ"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-400"
+                  />
+
+                  <label className="flex items-center gap-2 cursor-pointer pt-1 text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={editIsCommission}
+                      onChange={e => setEditIsCommission(e.target.checked)}
+                      className="rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-amber-400"
+                    />
+                    <span className="font-semibold text-amber-300 text-[11px]">
+                      {t('በፖሊስ ኮሚሽን ዋና መምሪያ ፔሮል ላይ ይመደብ (Commission Staff)', 'Commission Staff Payroll Eligibility')}
+                    </span>
+                  </label>
+                </div>
+
+                {/* 3. Names & Contact */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">{t('ሙሉ ስም (አማርኛ):', 'Full Name (Amharic):')}</label>
+                    <input
+                      type="text"
+                      required
+                      value={editFullNameAm}
+                      onChange={e => setEditFullNameAm(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">{t('ስልክ ቁጥር:', 'Phone Number:')}</label>
+                    <input
+                      type="text"
+                      value={editPhone}
+                      onChange={e => setEditPhone(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Rank, Department & Station */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">{t('ማዕረግ (Rank):', 'Rank:')}</label>
+                    <select
+                      value={editRank}
+                      onChange={e => setEditRank(e.target.value as PoliceRank)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-400 font-bold"
+                    >
+                      <option value="ኮንስታብል">ኮንስታብል</option>
+                      <option value="ረዳት ሳጅን">ረዳት ሳጅን</option>
+                      <option value="ምክትል ሳጅን">ምክትል ሳጅን</option>
+                      <option value="ሳጅን">ሳጅን</option>
+                      <option value="ዋና ሳጅን">ዋና ሳጅን</option>
+                      <option value="ረዳት ኢንስፔክተር">ረዳት ኢንስፔክተር</option>
+                      <option value="ምክትል ኢንስፔክተር">ምክትል ኢንስፔክተር</option>
+                      <option value="ዋና ኢንስፔክተር">ዋና ኢንስፔክተር</option>
+                      <option value="ኮማንደር">ኮማንደር</option>
+                      <option value="ረዳት ኮሚሽነር">ረዳት ኮሚሽነር</option>
+                      <option value="ምክትል ኮሚሽነር">ምክትል ኮሚሽነር</option>
+                      <option value="ኮሚሽነር">ኮሚሽነር</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">{t('መምሪያ (Department):', 'Department:')}</label>
+                    <select
+                      value={editDepartment}
+                      onChange={e => setEditDepartment(e.target.value as DepartmentName)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-400"
+                    >
+                      <option value="የሰው ኃይል አስተዳደርና ልማት መምሪያ">የሰው ኃይል አስተዳደርና ልማት መምሪያ</option>
+                      <option value="ወንጀል ምርመራ መምሪያ">ወንጀል ምርመራ መምሪያ</option>
+                      <option value="ወንጀል መከላከልና ፓትሮል መምሪያ">ወንጀል መከላከልና ፓትሮል መምሪያ</option>
+                      <option value="ትራፊክ ደህንነትና ቁጥጥር መምሪያ">ትራፊክ ደህንነትና ቁጥጥር መምሪያ</option>
+                      <option value="ልዩ ፈጣን ኃይል መምሪያ">ልዩ ፈጣን ኃይል መምሪያ</option>
+                      <option value="ሥልጠናና የፖሊስ ኮሌጅ">ሥልጠናና የፖሊስ ኮሌጅ</option>
+                      <option value="ሎጂስቲክስና ንብረት አስተዳደር">ሎጂስቲክስና ንብረት አስተዳደር</option>
+                      <option value="ፋይናንስና በጀት መምሪያ">ፋይናንስና በጀት መምሪያ</option>
+                      <option value="የኮሚሽኑ ዋና አዛዥ ጽ/ቤት">የኮሚሽኑ ዋና አዛዥ ጽ/ቤት</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">{t('ጣቢያ (Station):', 'Station:')}</label>
+                    <select
+                      value={editStation}
+                      onChange={e => setEditStation(e.target.value as StationLocation)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-400"
+                    >
+                      <option value="አሶሳ ዋና መምሪያ (Assosa HQ)">አሶሳ ዋና መምሪያ (Assosa HQ)</option>
+                      <option value="አሶሳ ከተማ ፖሊስ መምሪያ">አሶሳ ከተማ ፖሊስ መምሪያ</option>
+                      <option value="መተከል ዞን ፖሊስ መምሪያ (Gilgel Beles)">መተከል ዞን ፖሊስ መምሪያ</option>
+                      <option value="ካማሺ ዞን ፖሊስ መምሪያ (Kamashi)">ካማሺ ዞን ፖሊስ መምሪያ</option>
+                      <option value="ባምባሲ ወረዳ ፖሊስ ጣቢያ">ባምባሲ ወረዳ ፖሊስ ጣቢያ</option>
+                      <option value="ጉባ ወረዳ ፖሊስ ጣቢያ (Grand Renaissance Dam Area)">ጉባ ወረዳ ፖሊስ ጣቢያ</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 5. Residential Address (Custom entry by admin) */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                  <label className="block text-slate-200 font-bold">
+                    ⭐ {t('የመኖሪያ አድራሻ (በአድሚኑ በነፃነት የሚሞላ):', 'Residential Address:')}
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div>
+                      <span className="text-slate-400 text-[10px] block mb-1">{t('ክልል', 'Region')}</span>
+                      <input
+                        type="text"
+                        value={editRegion}
+                        onChange={e => setEditRegion(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block mb-1">{t('ዞን', 'Zone')}</span>
+                      <input
+                        type="text"
+                        value={editZone}
+                        onChange={e => setEditZone(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block mb-1">{t('ወረዳ', 'Wereda')}</span>
+                      <input
+                        type="text"
+                        value={editWereda}
+                        onChange={e => setEditWereda(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block mb-1">{t('ቀበሌ', 'Kebele')}</span>
+                      <input
+                        type="text"
+                        value={editKebele}
+                        onChange={e => setEditKebele(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 6. Emergency Contact */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">{t('የአደጋ ጊዜ ተጠሪ ስም:', 'Emergency Contact:')}</label>
+                    <input
+                      type="text"
+                      value={editEmergencyName}
+                      onChange={e => setEditEmergencyName(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">{t('የተጠሪ ስልክ:', 'Contact Phone:')}</label>
+                    <input
+                      type="text"
+                      value={editEmergencyPhone}
+                      onChange={e => setEditEmergencyPhone(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setActionModal(null)}
+                    className="px-4 py-2 text-slate-400 hover:text-white"
+                  >
+                    {t('ሰርዝ', 'Cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl flex items-center gap-1.5 shadow"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSubmitting ? t('በማስቀመጥ ላይ...', 'Saving...') : t('ለውጦችን በማህደር አስቀምጥ', 'Save Profile Changes')}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 13. Admin Delete Member Confirmation Modal */}
+        {actionModal === 'delete_member' && (
+          <div className="fixed inset-0 z-60 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-rose-500/40 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl text-xs">
+              <div className="flex items-center gap-3 text-rose-400">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-6 h-6 text-rose-400" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-white">
+                    {t('የፖሊስ አባልን ከሲስተሙ ማጥፋት (Delete Officer)', 'Delete Police Officer')}
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    {member.identity.fullName} ({member.policeId})
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 text-[11px]">
+                {t(
+                  'ማስጠንቀቂያ፡ ይህ እርምጃ አባሉን ከማዕከላዊ የሰው ኃይል ሬጅስትሪና ከክላውድ ዳታቤዝ ሙሉ በሙሉ ይሰርዛል።',
+                  'Warning: This action permanently removes this officer from the registry and cloud database.'
+                )}
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  {t('የማጥፋት ምክንያት (Reason for Deletion):', 'Reason for Deletion:')}
+                </label>
+                <input
+                  type="text"
+                  value={deleteReason}
+                  onChange={e => setDeleteReason(e.target.value)}
+                  placeholder="ለምሳሌ፡ በስህተት የገባ ወይም የተሰረዘ መዝገብ"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-rose-400"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setActionModal(null)}
+                  className="px-4 py-2 text-slate-400 hover:text-white"
+                >
+                  {t('ተመለስ', 'Cancel')}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={handleDeleteMember}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-black rounded-xl flex items-center gap-1.5 shadow-lg shadow-rose-600/30"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isSubmitting ? t('በማጥፋት ላይ...', 'Deleting...') : t('አባል ከሲስተሙ ሰርዝ', 'Confirm Delete')}</span>
                 </button>
               </div>
             </div>

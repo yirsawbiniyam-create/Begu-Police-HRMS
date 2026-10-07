@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useHrms } from '../../context/HrmsContext';
 import { MemberProfile, PoliceRank, DepartmentName, EmploymentStatus } from '../../types/hrms';
 import { MemberPersonnelFileModal } from './MemberPersonnelFileModal';
+import { AdminAddMemberModal } from './AdminAddMemberModal';
 import {
   Users,
   Search,
@@ -16,13 +17,17 @@ import {
   FileSpreadsheet,
   Printer,
   Plus,
+  UserPlus,
   GraduationCap,
   TrendingUp,
   Calendar,
   Gift,
   AlertOctagon,
   Award,
-  FolderOpen
+  FolderOpen,
+  Edit3,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 interface PersonnelRegistryProps {
@@ -30,7 +35,7 @@ interface PersonnelRegistryProps {
 }
 
 export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGateway }) => {
-  const { members, t, currentRole } = useHrms();
+  const { members, t, currentRole, deleteMember } = useHrms();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRank, setSelectedRank] = useState<string>('all');
@@ -40,9 +45,17 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
 
   const [selectedMemberForModal, setSelectedMemberForModal] = useState<MemberProfile | null>(null);
   const [initialTabForModal, setInitialTabForModal] = useState<string>('overview');
+  const [initialActionForModal, setInitialActionForModal] = useState<string | null>(null);
   const [showQuickRecordLauncher, setShowQuickRecordLauncher] = useState<boolean>(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState<boolean>(false);
   const [selectedPoliceIdForLauncher, setSelectedPoliceIdForLauncher] = useState<string>('');
   const [selectedTabForLauncher, setSelectedTabForLauncher] = useState<string>('training');
+
+  // Direct Admin Delete States
+  const [memberToDelete, setMemberToDelete] = useState<MemberProfile | null>(null);
+  const [deleteReasonText, setDeleteReasonText] = useState<string>('');
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Filter logic
   const filteredMembers = useMemo(() => {
@@ -135,6 +148,16 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {(currentRole === 'hr_admin' || currentRole === 'management') && (
+            <button
+              onClick={() => setShowAddMemberModal(true)}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-xs flex items-center gap-2 transition-all shadow-md active:scale-95"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>{t('አዲስ አባል እንደ አዲስ መዝግብ', 'Register New Officer')}</span>
+            </button>
+          )}
+
           {currentRole !== 'member' && (
             <button
               onClick={() => {
@@ -403,6 +426,7 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
                         <button
                           onClick={() => {
                             setInitialTabForModal('overview');
+                            setInitialActionForModal(null);
                             setSelectedMemberForModal(m);
                           }}
                           className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm ml-1"
@@ -410,6 +434,33 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
                           <FolderOpen className="w-3.5 h-3.5" />
                           <span>{t('ዶሴ ክፈት', 'Dossier')}</span>
                         </button>
+
+                        {(currentRole === 'hr_admin' || currentRole === 'management') && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setInitialTabForModal('overview');
+                                setInitialActionForModal('edit_profile');
+                                setSelectedMemberForModal(m);
+                              }}
+                              title={t('የአባሉን መረጃ አርትዕ (አድራሻ፣ የስራ ሃላፊነት)', 'Edit Profile (Address, Role)')}
+                              className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 transition-colors border border-amber-500/30"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setMemberToDelete(m);
+                                setDeleteReasonText('');
+                                setDeleteFeedback(null);
+                              }}
+                              title={t('አባል ከሲስተም ሰርዝ / አጥፋ', 'Delete Officer')}
+                              className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-600 text-rose-300 hover:text-white transition-colors border border-rose-500/30"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -523,8 +574,126 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
         <MemberPersonnelFileModal
           member={selectedMemberForModal}
           initialTab={initialTabForModal}
-          onClose={() => setSelectedMemberForModal(null)}
+          initialActionModal={initialActionForModal || undefined}
+          onClose={() => {
+            setSelectedMemberForModal(null);
+            setInitialActionForModal(null);
+          }}
         />
+      )}
+
+      {/* Admin New Member Creation Modal */}
+      <AdminAddMemberModal
+        isOpen={showAddMemberModal}
+        onClose={() => setShowAddMemberModal(false)}
+        onSuccess={newMember => {
+          setSelectedMemberForModal(newMember);
+          setInitialTabForModal('overview');
+          setInitialActionForModal(null);
+        }}
+      />
+
+      {/* Admin Direct Delete Confirmation Modal */}
+      {memberToDelete && (
+        <div className="fixed inset-0 z-60 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-rose-500/40 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl text-xs">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6 text-rose-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-white">
+                  {t('የፖሊስ አባልን ከሲስተም ሰርዝ / አጥፋ', 'Delete Officer From System')}
+                </h4>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  {memberToDelete.policeId} · {memberToDelete.identity.fullName}
+                </p>
+              </div>
+            </div>
+
+            {deleteFeedback && (
+              <div
+                className={`p-3 rounded-xl border text-xs font-semibold ${
+                  deleteFeedback.type === 'success'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                }`}
+              >
+                {deleteFeedback.message}
+              </div>
+            )}
+
+            <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-2xl space-y-1 text-slate-300">
+              <p className="font-bold text-rose-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                <span>{t('እርግጠኛ ነዎት ይህን አባል ማጥፋት ይፈልጋሉ?', 'Are you sure you want to delete this officer?')}</span>
+              </p>
+              <p className="text-[11px] text-slate-400">
+                {t(
+                  'ይህ እርምጃ የአባሉን የግል ማህደር፣ የደመወዝ ዝርዝርና ተያያዥ መረጃዎችን ከክላውድ ዳታቤዝ (ፋየርስቶር) ሙሉ በሙሉ ያጠፋል።',
+                  'This action permanently deletes this officer profile and associated records from Cloud Firestore.'
+                )}
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-slate-300 font-bold">
+                {t('የማጥፋት ምክንያት (ምሳሌ፡ በስህተት የገባ፣ የተባረረ):', 'Reason for Deletion:')}
+              </label>
+              <input
+                type="text"
+                value={deleteReasonText}
+                onChange={e => setDeleteReasonText(e.target.value)}
+                placeholder="ለምሳሌ፡ የተባዛ/በስህተት የተመዘገበ መረጃ..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-rose-400"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setMemberToDelete(null);
+                  setDeleteReasonText('');
+                  setDeleteFeedback(null);
+                }}
+                className="px-4 py-2 text-slate-400 hover:text-white"
+              >
+                {t('ተመለስ / ሰርዝ', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  setIsDeleting(true);
+                  setDeleteFeedback(null);
+                  try {
+                    const res = await deleteMember(memberToDelete.policeId, deleteReasonText);
+                    setIsDeleting(false);
+                    if (res.success) {
+                      setDeleteFeedback({ type: 'success', message: res.message });
+                      setTimeout(() => {
+                        setMemberToDelete(null);
+                        setDeleteReasonText('');
+                        setDeleteFeedback(null);
+                      }, 1000);
+                    } else {
+                      setDeleteFeedback({ type: 'error', message: res.message });
+                    }
+                  } catch (err: any) {
+                    setIsDeleting(false);
+                    setDeleteFeedback({ type: 'error', message: err?.message || 'አባሉን ማጥፋት አልተቻለም' });
+                  }
+                }}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-xl flex items-center gap-1.5 shadow"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeleting ? t('በማጥፋት ላይ...', 'Deleting...') : t('አባል ሙሉ በሙሉ አጥፋ', 'Permanently Delete')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

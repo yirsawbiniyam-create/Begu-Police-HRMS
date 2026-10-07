@@ -509,6 +509,7 @@ export interface MemberPayrollCustomization {
   hivFundDeduction?: number; // የኤችአይቪ ፈንድ መዋጮ (HIV/AIDS Fund)
   medicalDeduction?: number; // የህክምና መዋጮ (Medical Contribution)
   otherDeductions?: number; // ልዩ ልዩ / ሌሎች ቅነሳዎች (Other Deductions)
+  customIncomeTax?: number | null; // በፔሮል ኦፊሰሩ የተስተካከለ የስራ ግብር (Custom / Overridden Employment Income Tax)
   healthInsuranceDeduction?: number; // fixed amount in ETB
   redCrossDeduction?: number; // fixed amount in ETB
   courtOrDisciplinaryPenalty?: number; // fixed amount in ETB
