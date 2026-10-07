@@ -1303,6 +1303,8 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (clean.includes('ረዳት ኢንስፔክተር') || clean.toLowerCase().includes('asst inspector')) return 'ረዳት ኢንስፔክተር';
     if (clean.includes('ምክትል ኢንስፔክተር') || clean.toLowerCase().includes('deputy inspector')) return 'ምክትል ኢንስፔክተር';
     if (clean.includes('ዋና ኢንስፔክተር') || clean.toLowerCase().includes('chief inspector')) return 'ዋና ኢንስፔክተር';
+    if (clean.includes('ኢንስፔክተር') || clean.toLowerCase().includes('inspector')) return 'ኢንስፔክተር';
+    if (clean.includes('ምክትል ኮማንደር') || clean.toLowerCase().includes('deputy commander')) return 'ምክትል ኮማንደር';
     if (clean.includes('ኮማንደር') || clean.toLowerCase().includes('commander')) return 'ኮማንደር';
     if (clean.includes('ረዳት ኮሚሽነር') || clean.toLowerCase().includes('asst commissioner')) return 'ረዳት ኮሚሽነር';
     if (clean.includes('ምክትል ኮሚሽነር') || clean.toLowerCase().includes('deputy commissioner')) return 'ምክትል ኮሚሽነር';
@@ -1319,11 +1321,13 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'ዋና ሳጅን': return 5;
       case 'ረዳት ኢንስፔክተር': return 6;
       case 'ምክትል ኢንስፔክተር': return 7;
-      case 'ዋና ኢንስፔክተር': return 8;
-      case 'ኮማንደር': return 9;
-      case 'ረዳት ኮሚሽነር': return 10;
-      case 'ምክትል ኮሚሽነር': return 10;
-      case 'ኮሚሽነር': return 10;
+      case 'ኢንስፔክተር': return 8;
+      case 'ዋና ኢንስፔክተር': return 9;
+      case 'ምክትል ኮማንደር': return 10;
+      case 'ኮማንደር': return 11;
+      case 'ረዳት ኮሚሽነር': return 12;
+      case 'ምክትል ኮሚሽነር': return 13;
+      case 'ኮሚሽነር': return 14;
       default: return 1;
     }
   };

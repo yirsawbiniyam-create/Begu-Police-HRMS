@@ -223,11 +223,18 @@ export const PersonnelRegistry: React.FC<PersonnelRegistryProps> = ({ onOpenIdGa
               <option value="all">{t('ሁሉም ማዕረጎች', 'All Ranks')}</option>
               <option value="ኮንስታብል">ኮንስታብል</option>
               <option value="ረዳት ሳጅን">ረዳት ሳጅን</option>
+              <option value="ምክትል ሳጅን">ምክትል ሳጅን</option>
               <option value="ሳጅን">ሳጅን</option>
               <option value="ዋና ሳጅን">ዋና ሳጅን</option>
+              <option value="ረዳት ኢንስፔክተር">ረዳት ኢንስፔክተር</option>
               <option value="ምክትል ኢንስፔክተር">ምክትል ኢንስፔክተር</option>
+              <option value="ኢንስፔክተር">ኢንስፔክተር</option>
               <option value="ዋና ኢንስፔክተር">ዋና ኢንስፔክተር</option>
+              <option value="ምክትል ኮማንደር">ምክትል ኮማንደር</option>
               <option value="ኮማንደር">ኮማንደር</option>
+              <option value="ረዳት ኮሚሽነር">ረዳት ኮሚሽነር</option>
+              <option value="ምክትል ኮሚሽነር">ምክትል ኮሚሽነር</option>
+              <option value="ኮሚሽነር">ኮሚሽነር</option>
             </select>
           </div>
 

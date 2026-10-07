@@ -2114,14 +2114,20 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   onChange={e => setPromoRank(e.target.value as PoliceRank)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
                 >
+                  <option value="ኮንስታብል">ኮንስታብል</option>
                   <option value="ረዳት ሳጅን">ረዳት ሳጅን</option>
+                  <option value="ምክትል ሳጅን">ምክትል ሳጅን</option>
                   <option value="ሳጅን">ሳጅን</option>
                   <option value="ዋና ሳጅን">ዋና ሳጅን</option>
                   <option value="ረዳት ኢንስፔክተር">ረዳት ኢንስፔክተር</option>
                   <option value="ምክትል ኢንስፔክተር">ምክትል ኢንስፔክተር</option>
+                  <option value="ኢንስፔክተር">ኢንስፔክተር</option>
                   <option value="ዋና ኢንስፔክተር">ዋና ኢንስፔክተር</option>
+                  <option value="ምክትል ኮማንደር">ምክትል ኮማንደር</option>
                   <option value="ኮማንደር">ኮማንደር</option>
                   <option value="ረዳት ኮሚሽነር">ረዳት ኮሚሽነር</option>
+                  <option value="ምክትል ኮሚሽነር">ምክትል ኮሚሽነር</option>
+                  <option value="ኮሚሽነር">ኮሚሽነር</option>
                 </select>
               </div>
 
@@ -3378,7 +3384,9 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                       <option value="ዋና ሳጅን">ዋና ሳጅን</option>
                       <option value="ረዳት ኢንስፔክተር">ረዳት ኢንስፔክተር</option>
                       <option value="ምክትል ኢንስፔክተር">ምክትል ኢንስፔክተር</option>
+                      <option value="ኢንስፔክተር">ኢንስፔክተር</option>
                       <option value="ዋና ኢንስፔክተር">ዋና ኢንስፔክተር</option>
+                      <option value="ምክትል ኮማንደር">ምክትል ኮማንደር</option>
                       <option value="ኮማንደር">ኮማንደር</option>
                       <option value="ረዳት ኮሚሽነር">ረዳት ኮሚሽነር</option>
                       <option value="ምክትል ኮሚሽነር">ምክትል ኮሚሽነር</option>

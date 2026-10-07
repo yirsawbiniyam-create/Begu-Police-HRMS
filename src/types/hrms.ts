@@ -10,7 +10,9 @@ export type PoliceRank =
   | 'ዋና ሳጅን' // Chief Sergeant
   | 'ረዳት ኢንስፔክተር' // Assistant Inspector
   | 'ምክትል ኢንስፔክተር' // Deputy Inspector
+  | 'ኢንስፔክተር' // Inspector
   | 'ዋና ኢንስፔክተር' // Chief Inspector
+  | 'ምክትል ኮማንደር' // Deputy Commander
   | 'ኮማንደር' // Commander
   | 'ረዳት ኮሚሽነር' // Assistant Commissioner
   | 'ምክትል ኮሚሽነር' // Deputy Commissioner
@@ -158,11 +160,15 @@ export interface PersonnelDocument {
   id: string;
   title: string;
   documentType:
+    | 'የትምህርት ማስረጃ'
+    | 'የማዕረግ ደብዳቤ'
+    | 'የእርከን ደብዳቤ'
+    | 'የስልጠና ማስረጃ'
     | 'ደብዳቤ'
+    | 'ይፋዊ መፃፃፊያ'
     | 'የቅጥር ሰነድ'
     | 'የPromotion ደብዳቤ'
     | 'የዝውውር ደብዳቤ'
-    | 'የስልጠና ማስረጃ'
     | 'የፈቃድ ሰነድ'
     | 'የሽልማት ሰነድ'
     | 'የዲሲፕሊን ሰነድ'
@@ -170,11 +176,13 @@ export interface PersonnelDocument {
     | 'የጡረታ ሰነድ'
     | 'የመታወቂያ ኮፒ'
     | 'ሌሎች HR ሰነዶች';
+  folderCategory?: 'education' | 'rank_step' | 'training' | 'correspondence' | 'other';
   referenceNumber: string;
   documentDate: string;
   fileUrl: string; // base64 or photo URL
   fileType: 'image' | 'pdf';
   fileSizeText?: string;
+  issuingEntity?: string;
   uploadedBy: string;
   uploadedAt: string;
   notes?: string;

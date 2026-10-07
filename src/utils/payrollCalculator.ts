@@ -11,16 +11,21 @@ import {
 import { SALARY_SCALE_MATRIX } from '../data/mockHrmsData';
 
 /**
- * Standard Ethiopian Progressive Income Tax Brackets (Proclamation 979/2016)
+ * Standard Ethiopian Progressive Income Tax Brackets
+ * 0 – 2000: 0%
+ * 2001 – 4000: 15% (deduction 300)
+ * 4001 – 7000: 20% (deduction 500)
+ * 7001 – 10000: 25% (deduction 850)
+ * 10001 – 14000: 30% (deduction 1350)
+ * > 14000: 35% (deduction 2050)
  */
 export const DEFAULT_ETHIOPIAN_TAX_BRACKETS: TaxBracket[] = [
-  { id: 'tax-1', minIncome: 0, maxIncome: 600, rate: 0.00, deduction: 0, label: '0 – 600 ብር (ነፃ / 0%)' },
-  { id: 'tax-2', minIncome: 601, maxIncome: 1650, rate: 0.10, deduction: 60, label: '601 – 1,650 ብር (10%)' },
-  { id: 'tax-3', minIncome: 1651, maxIncome: 3200, rate: 0.15, deduction: 142.50, label: '1,651 – 3,200 ብር (15%)' },
-  { id: 'tax-4', minIncome: 3201, maxIncome: 5250, rate: 0.20, deduction: 302.50, label: '3,201 – 5,250 ብር (20%)' },
-  { id: 'tax-5', minIncome: 5251, maxIncome: 7800, rate: 0.25, deduction: 565, label: '5,251 – 7,800 ብር (25%)' },
-  { id: 'tax-6', minIncome: 7801, maxIncome: 10900, rate: 0.30, deduction: 955, label: '7,801 – 10,900 ብር (30%)' },
-  { id: 'tax-7', minIncome: 10901, maxIncome: null, rate: 0.35, deduction: 1500, label: 'ከ 10,900 ብር በላይ (35%)' }
+  { id: 'tax-1', minIncome: 0, maxIncome: 2000, rate: 0.00, deduction: 0, label: '0 – 2,000 ብር (ነፃ / 0%)' },
+  { id: 'tax-2', minIncome: 2001, maxIncome: 4000, rate: 0.15, deduction: 300, label: '2,001 – 4,000 ብር (15%)' },
+  { id: 'tax-3', minIncome: 4001, maxIncome: 7000, rate: 0.20, deduction: 500, label: '4,001 – 7,000 ብር (20%)' },
+  { id: 'tax-4', minIncome: 7001, maxIncome: 10000, rate: 0.25, deduction: 850, label: '7,001 – 10,000 ብር (25%)' },
+  { id: 'tax-5', minIncome: 10001, maxIncome: 14000, rate: 0.30, deduction: 1350, label: '10,001 – 14,000 ብር (30%)' },
+  { id: 'tax-6', minIncome: 14001, maxIncome: null, rate: 0.35, deduction: 2050, label: 'ከ 14,001 ብር በላይ (35%)' }
 ];
 
 /**
@@ -162,38 +167,52 @@ export const DEFAULT_RANK_SALARY_SCALES: RankSalaryGradeScale[] = [
   },
   {
     grade: 8,
-    rank: 'ዋና ኢንስፔክተር',
-    rankEn: 'Chief Inspector',
-    steps: SALARY_SCALE_MATRIX[8] || [19900, 20790, 21730, 22710, 23730, 24800, 25920, 27080, 28300],
+    rank: 'ኢንስፔክተር',
+    rankEn: 'Inspector',
+    steps: SALARY_SCALE_MATRIX[8] || [18300, 19120, 19980, 20880, 21820, 22800, 23830, 24900, 26020],
     notes: 'ደረጃ 8'
   },
   {
     grade: 9,
-    rank: 'ኮማንደር',
-    rankEn: 'Commander',
-    steps: SALARY_SCALE_MATRIX[9] || [24200, 25290, 26430, 27620, 28860, 30160, 31520, 32940, 34420],
-    notes: 'የከፍተኛ አመራር ደረጃ 9'
+    rank: 'ዋና ኢንስፔክተር',
+    rankEn: 'Chief Inspector',
+    steps: SALARY_SCALE_MATRIX[9] || [19900, 20790, 21730, 22710, 23730, 24800, 25920, 27080, 28300],
+    notes: 'ደረጃ 9'
   },
   {
     grade: 10,
-    rank: 'ረዳት ኮሚሽነር',
-    rankEn: 'Assistant Commissioner',
-    steps: SALARY_SCALE_MATRIX[10] || [30500, 31870, 33300, 34800, 36370, 38010, 39720, 41510, 43380],
-    notes: 'የኮሚሽኑ ከፍተኛ አመራር ደረጃ 10'
+    rank: 'ምክትል ኮማንደር',
+    rankEn: 'Deputy Commander',
+    steps: SALARY_SCALE_MATRIX[10] || [22000, 22990, 24020, 25100, 26230, 27410, 28640, 29930, 31280],
+    notes: 'ደረጃ 10'
   },
   {
     grade: 11,
-    rank: 'ምክትል ኮሚሽነር',
-    rankEn: 'Deputy Commissioner',
-    steps: [36000, 37500, 39100, 40800, 42600, 44500, 46500, 48600, 50800],
-    notes: 'የኮሚሽኑ ም/ኮሚሽነር ደረጃ 11'
+    rank: 'ኮማንደር',
+    rankEn: 'Commander',
+    steps: SALARY_SCALE_MATRIX[11] || [24200, 25290, 26430, 27620, 28860, 30160, 31520, 32940, 34420],
+    notes: 'የከፍተኛ አመራር ደረጃ 11'
   },
   {
     grade: 12,
+    rank: 'ረዳት ኮሚሽነር',
+    rankEn: 'Assistant Commissioner',
+    steps: SALARY_SCALE_MATRIX[12] || [30500, 31870, 33300, 34800, 36370, 38010, 39720, 41510, 43380],
+    notes: 'የኮሚሽኑ ከፍተኛ አመራር ደረጃ 12'
+  },
+  {
+    grade: 13,
+    rank: 'ምክትል ኮሚሽነር',
+    rankEn: 'Deputy Commissioner',
+    steps: SALARY_SCALE_MATRIX[13] || [36000, 37500, 39100, 40800, 42600, 44500, 46500, 48600, 50800],
+    notes: 'የኮሚሽኑ ም/ኮሚሽነር ደረጃ 13'
+  },
+  {
+    grade: 14,
     rank: 'ኮሚሽነር',
     rankEn: 'Commissioner',
-    steps: [43000, 44800, 46700, 48700, 50800, 53000, 55300, 57700, 60200],
-    notes: 'የክልሉ ፖሊስ ኮሚሽነር ደረጃ 12'
+    steps: SALARY_SCALE_MATRIX[14] || [43000, 44800, 46700, 48700, 50800, 53000, 55300, 57700, 60200],
+    notes: 'የክልሉ ፖሊስ ኮሚሽነር ደረጃ 14'
   }
 ];
 
@@ -201,7 +220,9 @@ export const DEFAULT_RANK_SALARY_SCALES: RankSalaryGradeScale[] = [
  * Calculates progressive income tax based on Ethiopian Tax Brackets
  */
 export function calculateIncomeTax(taxableGrossIncome: number, brackets: TaxBracket[] = DEFAULT_ETHIOPIAN_TAX_BRACKETS): number {
-  if (taxableGrossIncome <= 600) {
+  const zeroBracket = brackets.find(b => b.rate === 0);
+  const exemptLimit = zeroBracket?.maxIncome ?? 2000;
+  if (taxableGrossIncome <= exemptLimit) {
     return 0;
   }
 

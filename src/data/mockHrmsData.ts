@@ -1,7 +1,7 @@
 import { MemberProfile, PoliceIdIdentity, OnlineApplication, AuditLogItem, NotificationItem, SystemUserAccount } from '../types/hrms';
 
 // Master Salary Scales for Police & Public Security (in ETB)
-// Grade 1 (Constable) to Grade 10 (Commissioner) with Step increments (1 - 9)
+// Grade 1 (Constable) to Grade 14 (Commissioner) with Step increments (1 - 9)
 export const SALARY_SCALE_MATRIX: Record<number, number[]> = {
   1: [6850, 7150, 7470, 7800, 8150, 8520, 8900, 9300, 9720], // Constable (ኮንስታብል)
   2: [7900, 8250, 8620, 9000, 9400, 9820, 10260, 10720, 11200], // Assistant Sergeant (ረዳት ሳጅን)
@@ -10,9 +10,13 @@ export const SALARY_SCALE_MATRIX: Record<number, number[]> = {
   5: [12100, 12640, 13210, 13800, 14420, 15070, 15750, 16460, 17200], // Chief Sergeant (ዋና ሳጅን)
   6: [14200, 14840, 15510, 16210, 16940, 17700, 18500, 19330, 20200], // Assistant Inspector (ረዳት ኢንስፔክተር)
   7: [16800, 17560, 18350, 19180, 20040, 20940, 21880, 22860, 23890], // Deputy Inspector (ምክትል ኢንስፔክተር)
-  8: [19900, 20790, 21730, 22710, 23730, 24800, 25920, 27080, 28300], // Chief Inspector (ዋና ኢንስፔክተር)
-  9: [24200, 25290, 26430, 27620, 28860, 30160, 31520, 32940, 34420], // Commander (ኮማንደር)
-  10: [30500, 31870, 33300, 34800, 36370, 38010, 39720, 41510, 43380], // Assistant / Deputy Commissioner (ረዳት/ምክትል ኮሚሽነር)
+  8: [18300, 19120, 19980, 20880, 21820, 22800, 23830, 24900, 26020], // Inspector (ኢንስፔክተር)
+  9: [19900, 20790, 21730, 22710, 23730, 24800, 25920, 27080, 28300], // Chief Inspector (ዋና ኢንስፔክተር)
+  10: [22000, 22990, 24020, 25100, 26230, 27410, 28640, 29930, 31280], // Deputy Commander (ምክትል ኮማንደር)
+  11: [24200, 25290, 26430, 27620, 28860, 30160, 31520, 32940, 34420], // Commander (ኮማንደር)
+  12: [30500, 31870, 33300, 34800, 36370, 38010, 39720, 41510, 43380], // Assistant Commissioner (ረዳት ኮሚሽነር)
+  13: [36000, 37500, 39100, 40800, 42600, 44500, 46500, 48600, 50800], // Deputy Commissioner (ምክትል ኮሚሽነር)
+  14: [43000, 44800, 46700, 48700, 50800, 53000, 55300, 57700, 60200]  // Commissioner (ኮሚሽነር)
 };
 
 // Simulating the Independent Existing Police ID System Database
