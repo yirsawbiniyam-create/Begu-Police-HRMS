@@ -303,6 +303,7 @@ export interface MemberProfile {
   userAccount: {
     username: string;
     password?: string;
+    role?: Role;
     isActive: boolean;
     lastLogin?: string;
     createdDate: string;

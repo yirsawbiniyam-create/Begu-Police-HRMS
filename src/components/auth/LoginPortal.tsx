@@ -221,7 +221,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ onLoginSuccess }) => {
                   type="button"
                   onClick={() => {
                     setUsername('admin');
-                    setPassword('admin@2026');
+                    setPassword('Admin123@');
                   }}
                   className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all font-semibold"
                 >

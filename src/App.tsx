@@ -55,6 +55,7 @@ const MainAppContent: React.FC = () => {
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        onOpenMemberFile={handleOpenMemberFile}
       />
 
       {/* Navigation Sub-header (only show if not strictly constrained or show member single tab) */}

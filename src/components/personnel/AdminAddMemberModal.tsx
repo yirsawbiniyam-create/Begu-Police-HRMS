@@ -4,7 +4,8 @@ import {
   MemberProfile,
   PoliceRank,
   DepartmentName,
-  StationLocation
+  StationLocation,
+  Role
 } from '../../types/hrms';
 import {
   X,
@@ -18,7 +19,8 @@ import {
   DollarSign,
   AlertCircle,
   CheckCircle,
-  Camera
+  Camera,
+  KeyRound
 } from 'lucide-react';
 
 interface AdminAddMemberModalProps {
@@ -74,6 +76,11 @@ export const AdminAddMemberModal: React.FC<AdminAddMemberModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Portal Account Credentials & System Role
+  const [accountRole, setAccountRole] = useState<Role>('member');
+  const [accountUsername, setAccountUsername] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
 
   if (!isOpen) return null;
 
@@ -185,8 +192,9 @@ export const AdminAddMemberModal: React.FC<AdminAddMemberModalProps> = ({
       awardsAndHonors: [],
       documents: [],
       userAccount: {
-        username: cleanPid.toLowerCase(),
-        password: `${cleanPid.toLowerCase()}@2026`,
+        username: accountUsername.trim() || cleanPid.toLowerCase(),
+        password: accountPassword.trim() || `${cleanPid.toLowerCase()}@2026`,
+        role: accountRole,
         isActive: true,
         createdDate: new Date().toISOString().substring(0, 10),
         createdBy: 'HR Admin'
@@ -684,6 +692,65 @@ export const AdminAddMemberModal: React.FC<AdminAddMemberModalProps> = ({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Section 6: Portal Login Credentials & System Role */}
+          <div className="bg-slate-950/80 border border-amber-500/30 rounded-2xl p-4 space-y-3">
+            <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+              <KeyRound className="w-4 h-4" />
+              <span>{t('6. የመግቢያ መለያና የስራ ሚና (System Role & Credentials)', '6. System Role & Credentials')}</span>
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  {t('የሲስተም የስራ ሚና *', 'System Role Selection *')}
+                </label>
+                <select
+                  value={accountRole}
+                  onChange={e => setAccountRole(e.target.value as Role)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-amber-400"
+                >
+                  <option value="member">👮 አባል (Member Self-Service)</option>
+                  <option value="hr_admin">👑 አድሚን (Admin / HR Admin)</option>
+                  <option value="management">🎖️ ከፍተኛ አመራር (Command / Management)</option>
+                  <option value="payroll_officer">💰 የደመወዝ ባለሙያ (Payroll Officer)</option>
+                  <option value="supervisor">🛡️ የቅርብ ሀላፊ (Immediate Supervisor)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  {t('የተጠቃሚ ስም (Username):', 'Username:')}
+                </label>
+                <input
+                  type="text"
+                  value={accountUsername}
+                  onChange={e => setAccountUsername(e.target.value)}
+                  placeholder={policeId.toLowerCase() || 'bg-000...'}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  {t('የይለፍ ቃል (Password):', 'Password:')}
+                </label>
+                <input
+                  type="text"
+                  value={accountPassword}
+                  onChange={e => setAccountPassword(e.target.value)}
+                  placeholder="Police@2026"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              {t(
+                'አድሚን፣ ከፍተኛ አመራር፣ የደመወዝ ባለሙያ፣ አባል ወይም የቅርብ ሀላፊ በመምረጥ ወዲያውኑ የመግቢያ መለያ በፋየርስቶር ክላውድ ዳታቤዝ ይመዘገባል።',
+                'Select among: Admin, Management, Payroll Officer, Member, or Supervisor. Credentials recorded in Firestore.'
+              )}
+            </p>
           </div>
 
           {/* Submit Action */}

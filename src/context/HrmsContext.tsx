@@ -88,7 +88,8 @@ interface HrmsContextType {
   login: (username: string, password: string) => { success: boolean; message: string; user?: SystemUserAccount };
   logout: () => void;
   userAccounts: SystemUserAccount[];
-  provisionMemberCredentials: (policeId: string, username?: string, password?: string) => { success: boolean; message: string };
+  provisionMemberCredentials: (policeId: string, username?: string, password?: string, role?: Role) => { success: boolean; message: string };
+  updateUserAccountCredentials: (userId: string, newUsername: string, newPassword: string, newRole?: Role) => Promise<{ success: boolean; message: string }>;
   toggleUserAccountStatus: (userId: string) => void;
   createStaffAccount: (accountData: Omit<SystemUserAccount, 'id' | 'createdDate' | 'createdBy'>) => { success: boolean; message: string };
   deleteStaffAccount: (userId: string) => { success: boolean; message: string };
@@ -1083,6 +1084,28 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setMembers(prev => [newMember, ...prev]);
     await saveMemberToFirebase(newMember);
+
+    if (newMember.userAccount) {
+      const assignedRole: Role = (newMember.userAccount as any).role || 'member';
+      const cleanUser = newMember.userAccount.username || pid;
+      const cleanPass = newMember.userAccount.password || `${pid.toLowerCase()}@2026`;
+      const accountData: SystemUserAccount = {
+        id: `usr-mem-${pid}`,
+        username: cleanUser,
+        password: cleanPass,
+        tempPassword: cleanPass,
+        role: assignedRole,
+        policeId: pid,
+        fullName: newMember.identity.fullName,
+        department: newMember.currentDepartment,
+        station: newMember.currentStation,
+        isActive: true,
+        createdDate: new Date().toISOString().substring(0, 10),
+        createdBy: currentUser?.fullName || 'HR Admin'
+      };
+      setUserAccounts(prev => [accountData, ...prev.filter(u => u.policeId !== pid)]);
+      await saveUserAccountToFirestore(accountData);
+    }
 
     addAuditLog({
       user: currentUser?.fullName || 'HR Admin',
@@ -2680,7 +2703,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (cleanUser.toLowerCase() === 'payroll' && u.role === 'payroll_officer') ||
           (u.policeId && u.policeId.toLowerCase() === cleanUser.toLowerCase())) &&
         (u.password === cleanPass ||
-          (u.role === 'hr_admin' && (cleanPass === 'Admin@123' || cleanPass === 'admin' || cleanPass === 'admin@2026')) ||
+          (u.role === 'hr_admin' && (cleanPass === 'Admin123@' || cleanPass === 'Admin@123' || cleanPass === 'admin' || cleanPass === 'admin@2026')) ||
           (u.role === 'payroll_officer' && (cleanPass === 'Payroll@123' || cleanPass === 'payroll' || cleanPass === 'payroll@2026')) ||
           cleanPass === 'Police@2026' || cleanPass === 'police@2026')
     );
@@ -2778,12 +2801,13 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.removeItem('begu_hrms_current_user');
   };
 
-  const provisionMemberCredentials = (policeId: string, customUsername?: string, customPassword?: string) => {
+  const provisionMemberCredentials = (policeId: string, customUsername?: string, customPassword?: string, customRole?: Role) => {
     const targetMember = members.find(m => m.policeId.toUpperCase() === policeId.toUpperCase());
     if (!targetMember) {
       return { success: false, message: 'አባሉ በመረጃ ቋቱ ውስጥ አልተገኘም' };
     }
 
+    const assignedRole: Role = customRole || 'member';
     const cleanUser = customUsername && customUsername.trim().length > 0 ? customUsername.trim() : targetMember.policeId;
     const cleanPass = customPassword && customPassword.trim().length > 0 ? customPassword.trim() : `${targetMember.policeId.toLowerCase()}@2026`;
 
@@ -2809,7 +2833,8 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isActive: true,
         createdDate: targetMember.userAccount?.createdDate || now,
         createdBy: currentUser?.fullName || 'HR Admin',
-        lastLogin: targetMember.userAccount?.lastLogin
+        lastLogin: targetMember.userAccount?.lastLogin,
+        role: assignedRole
       }
     };
 
@@ -2825,7 +2850,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       username: cleanUser,
       password: cleanPass,
       tempPassword: cleanPass,
-      role: 'member',
+      role: assignedRole,
       policeId: targetMember.policeId,
       fullName: targetMember.identity.fullName,
       department: targetMember.currentDepartment,
@@ -2847,10 +2872,18 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     saveUserAccountToFirestore(accountData);
 
+    // If active user is this member, sync session
+    if (currentUser?.policeId === policeId) {
+      setCurrentUser(accountData);
+      setCurrentRole(assignedRole);
+      localStorage.setItem('begu_hrms_current_user', JSON.stringify(accountData));
+      sessionStorage.setItem('begu_hrms_current_user', JSON.stringify(accountData));
+    }
+
     addAuditLog({
       user: currentUser?.fullName || 'HR Admin',
-      role: 'hr_admin',
-      action: `ለፖሊስ አባል የመግቢያ መለያ ተሰጠ: Username=${cleanUser}`,
+      role: currentRole,
+      action: `ለፖሊስ አባል የመግቢያ መለያና ሚና ተሰጠ: Username=${cleanUser}, Role=${assignedRole}`,
       targetPoliceId: targetMember.policeId,
       targetMemberName: targetMember.identity.fullName,
       category: 'id_integration'
@@ -2867,11 +2900,121 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
       linkTab: 'user_accounts'
     };
     setNotifications(prev => [notif, ...prev]);
-    saveNotificationToFirestore(notif);
 
     return {
       success: true,
-      message: `ለአባል ${targetMember.identity.fullName} የመግቢያ መለያ በተሳካ ሁኔታ ተዘጋጅቷል እና በፋየርስቶር ተቀምጧል!`
+      message: `ለአባል ${targetMember.identity.fullName} የተጠቃሚ ስም "${cleanUser}" እና ሚና "${assignedRole}" በፋየርስቶር በተሳካ ሁኔታ ተመዝግቧል!`
+    };
+  };
+
+  /**
+   * Update User Account Credentials (Username, Password, Role) and sync to Cloud Firestore
+   * Supports changing Admin's own credentials or any staff credentials
+   */
+  const updateUserAccountCredentials = async (
+    userId: string,
+    newUsername: string,
+    newPassword: string,
+    newRole?: Role
+  ): Promise<{ success: boolean; message: string }> => {
+    const cleanUser = newUsername.trim();
+    const cleanPass = newPassword.trim();
+    if (!cleanUser) {
+      return { success: false, message: 'እባክዎ ትክክለኛ የተጠቃሚ ስም ያስገቡ' };
+    }
+    if (!cleanPass) {
+      return { success: false, message: 'እባክዎ ትክክለኛ የይለፍ ቃል ያስገቡ' };
+    }
+
+    // Check duplicate username for another user
+    const duplicate = userAccounts.find(
+      u => u.id !== userId && u.username.toLowerCase() === cleanUser.toLowerCase()
+    );
+    if (duplicate) {
+      return {
+        success: false,
+        message: `"${cleanUser}" የሚለው የተጠቃሚ ስም አስቀድሞ በሌላ ተጠቃሚ ተይዟል። እባክዎ ሌላ የተጠቃሚ ስም ይምረጡ።`
+      };
+    }
+
+    // Locate target account
+    const targetIdx = userAccounts.findIndex(
+      u => u.id === userId || (currentUser?.id === userId && u.username === currentUser.username)
+    );
+    let targetAcc = targetIdx >= 0 ? userAccounts[targetIdx] : null;
+
+    if (!targetAcc && currentUser && currentUser.id === userId) {
+      targetAcc = currentUser;
+    }
+
+    if (!targetAcc) {
+      return { success: false, message: 'የተጠቃሚው መለያ አልተገኘም' };
+    }
+
+    const updatedRole = newRole || targetAcc.role;
+    const updatedAccount: SystemUserAccount = {
+      ...targetAcc,
+      username: cleanUser,
+      password: cleanPass,
+      tempPassword: cleanPass,
+      role: updatedRole
+    };
+
+    // 1. Update userAccounts in state
+    setUserAccounts(prev => {
+      const idx = prev.findIndex(u => u.id === updatedAccount.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = updatedAccount;
+        return copy;
+      }
+      return [updatedAccount, ...prev];
+    });
+
+    // 2. Persist account to Cloud Firestore
+    await saveUserAccountToFirestore(updatedAccount);
+
+    // 3. If target account is associated with a police officer, update the member document as well
+    if (updatedAccount.policeId) {
+      const mem = members.find(m => m.policeId.toUpperCase() === updatedAccount.policeId?.toUpperCase());
+      if (mem) {
+        const updatedMem = {
+          ...mem,
+          userAccount: {
+            ...mem.userAccount,
+            username: cleanUser,
+            password: cleanPass,
+            role: updatedRole,
+            isActive: mem.userAccount?.isActive ?? true,
+            createdDate: mem.userAccount?.createdDate || new Date().toISOString().substring(0, 10)
+          }
+        };
+        setMembers(prev => prev.map(m => (m.policeId.toUpperCase() === mem.policeId.toUpperCase() ? updatedMem : m)));
+        await saveMemberToFirebase(updatedMem);
+      }
+    }
+
+    // 4. If current logged in user is updated, update currentUser state and local session immediately
+    if (currentUser?.id === targetAcc.id || currentUser?.username === targetAcc.username) {
+      setCurrentUser(updatedAccount);
+      setCurrentRole(updatedAccount.role);
+      localStorage.setItem('begu_hrms_current_user', JSON.stringify(updatedAccount));
+      sessionStorage.setItem('begu_hrms_current_user', JSON.stringify(updatedAccount));
+    }
+
+    // 5. Audit trail
+    addAuditLog({
+      user: currentUser?.fullName || updatedAccount.fullName || 'HR Admin',
+      role: currentRole,
+      action: `የተጠቃሚ መለያ ስምና የይለፍ ቃል ተቀይሮ በፋየርስቶር ተመዝግቧል: Username=${cleanUser}, Role=${updatedRole}`,
+      targetPoliceId: updatedAccount.policeId || 'SYSTEM',
+      targetMemberName: updatedAccount.fullName,
+      category: 'id_integration'
+    });
+
+    return {
+      success: true,
+      message: 'የተጠቃሚ ስም እና የይለፍ ቃል በፋየርስቶር ክላውድ ዳታቤዝ በተሳካ ሁኔታ ተቀይሮ ተቀምጧል!'
     };
   };
 
@@ -2971,6 +3114,7 @@ export const HrmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         userAccounts,
         provisionMemberCredentials,
+        updateUserAccountCredentials,
         toggleUserAccountStatus,
         createStaffAccount,
         deleteStaffAccount,

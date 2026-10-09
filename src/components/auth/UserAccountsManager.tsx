@@ -46,6 +46,7 @@ export const UserAccountsManager: React.FC = () => {
   const [selectedMemberForCred, setSelectedMemberForCred] = useState<MemberProfile | null>(null);
   const [inputUsername, setInputUsername] = useState('');
   const [inputPassword, setInputPassword] = useState('Police@2026');
+  const [inputRole, setInputRole] = useState<Role>('member');
   const [showPassword, setShowPassword] = useState(true);
   const [provisionSuccessMsg, setProvisionSuccessMsg] = useState<string | null>(null);
   const [provisionErrorMsg, setProvisionErrorMsg] = useState<string | null>(null);
@@ -96,6 +97,8 @@ export const UserAccountsManager: React.FC = () => {
     // Default username to member's Police ID (or existing username)
     setInputUsername(m.userAccount?.username || m.policeId);
     setInputPassword(m.userAccount?.password || 'Police@2026');
+    const existingAcc = userAccounts.find(u => u.policeId === m.policeId);
+    setInputRole((existingAcc?.role || m.userAccount?.role || (m.policeId === 'BG-000100' ? 'hr_admin' : 'member')) as Role);
     setProvisionSuccessMsg(null);
     setProvisionErrorMsg(null);
     setCopiedSlip(false);
@@ -118,7 +121,8 @@ export const UserAccountsManager: React.FC = () => {
     const res = provisionMemberCredentials(
       selectedMemberForCred.policeId,
       inputUsername,
-      inputPassword
+      inputPassword,
+      inputRole
     );
 
     if (res.success) {
@@ -648,6 +652,29 @@ export const UserAccountsManager: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  {t('የሲስተም የስራ ሚና (System Role) *', 'System Role Selection *')}
+                </label>
+                <select
+                  value={inputRole}
+                  onChange={e => setInputRole(e.target.value as Role)}
+                  className="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl p-2.5 text-xs text-white font-bold"
+                >
+                  <option value="member">👮 አባል (Police Member Self-Service)</option>
+                  <option value="hr_admin">👑 አድሚን (Admin / HR Admin)</option>
+                  <option value="management">🎖️ ከፍተኛ አመራር (Command / Management)</option>
+                  <option value="payroll_officer">💰 የደመወዝ ባለሙያ (Payroll Officer)</option>
+                  <option value="supervisor">🛡️ የቅርብ ሀላፊ (Immediate Supervisor)</option>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {t(
+                    'አድሚን፣ ከፍተኛ አመራር፣ የደመወዝ ባለሙያ፣ አባል ወይም የቅርብ ሀላፊ በመምረጥ ፈቃድ ይስጡ።',
+                    'Assign among: Admin, Management, Payroll Officer, Member, or Supervisor.'
+                  )}
+                </p>
+              </div>
+
               {/* Credential Slip Preview */}
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-400 space-y-1">
                 <div className="text-amber-400 font-bold text-center border-b border-slate-800 pb-1">
@@ -664,6 +691,20 @@ export const UserAccountsManager: React.FC = () => {
                 <div className="flex justify-between">
                   <span>Password:</span>
                   <span className="text-emerald-400 font-bold">{inputPassword}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Role:</span>
+                  <span className="text-amber-400 font-bold">
+                    {inputRole === 'hr_admin'
+                      ? '👑 አድሚን'
+                      : inputRole === 'management'
+                      ? '🎖️ ከፍተኛ አመራር'
+                      : inputRole === 'payroll_officer'
+                      ? '💰 የደመወዝ ባለሙያ'
+                      : inputRole === 'supervisor'
+                      ? '🛡️ የቅርብ ሀላፊ'
+                      : '👮 አባል'}
+                  </span>
                 </div>
               </div>
 

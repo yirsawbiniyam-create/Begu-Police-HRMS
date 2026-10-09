@@ -23,6 +23,20 @@ export const SALARY_SCALE_MATRIX: Record<number, number[]> = {
 // The HRMS queries this system via API and links or syncs member identity
 export const EXTERNAL_POLICE_ID_SYSTEM_DATABASE: PoliceIdIdentity[] = [
   {
+    policeId: 'BG-000100',
+    fullName: 'ኮሚሽነር አበራ ታደሰ',
+    fullNameEn: 'Commissioner Abera Tadesse',
+    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
+    gender: 'ወንድ',
+    dateOfBirth: '1975-02-14',
+    nationality: 'ኢትዮጵያዊ',
+    issueDate: '2015-01-10',
+    bloodGroup: 'O+',
+    emergencyContact: { name: 'ወ/ሮ ዘውዲቱ በቀለ', phone: '0911223344', relationship: 'ባለቤት' },
+    address: { region: 'ቤኒሻንጉል ጉሙዝ', zone: 'አሶሳ', wereda: 'አሶሳ ከተማ', kebele: 'ቀበሌ 01' },
+    idSystemStatus: 'active',
+  },
+  {
     policeId: 'BG-000101',
     fullName: 'አሸናፊ ታደሰ ባሳዝነዉ',
     photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80',
@@ -195,6 +209,49 @@ export const EXTERNAL_POLICE_ID_SYSTEM_DATABASE: PoliceIdIdentity[] = [
 ];
 
 export const INITIAL_MEMBERS: MemberProfile[] = [
+  {
+    policeId: 'BG-000100',
+    badgeNumber: 'POL-0100',
+    identity: EXTERNAL_POLICE_ID_SYSTEM_DATABASE[0],
+    currentRank: 'ኮሚሽነር',
+    currentDepartment: 'የሰው ኃይል አስተዳደርና ልማት መምሪያ',
+    currentStation: 'አሶሳ ዋና መምሪያ (Assosa HQ)',
+    dutyStationAddress: 'አሶሳ ዋና ፖሊስ ኮሚሽን ጠቅላይ መምሪያ ጽ/ቤት',
+    position: 'ዋና የHR አስተዳዳሪና የኮሚሽነር ልዩ አማካሪ',
+    employmentDate: '2000-01-10',
+    employmentType: 'ቋሚ (Permanent)',
+    status: 'active',
+    salaryGrade: 14,
+    salaryStep: 9,
+    baseSalary: SALARY_SCALE_MATRIX[14][8],
+    monthlyAllowances: { duty: 5000, field: 3000, housing: 8000, transport: 3500, hazard: 2500, ration: 1500 },
+    pensionDeductionRate: 0.07,
+    taxDeductionRate: 0.35,
+    leaveBalance: { annualTotal: 30, annualUsed: 5, annualRemaining: 25, sickUsed: 0, specialUsed: 0 },
+    rankHistory: [
+      { id: 'rh-100-1', rank: 'ዋና ኢንስፔክተር', effectiveDate: '2005-01-10', orderNumber: 'ORD/2005/001', approvedBy: 'የክልሉ ርዕሰ መስተዳድር' },
+      { id: 'rh-100-2', rank: 'ኮማንደር', effectiveDate: '2012-04-15', orderNumber: 'ORD/2012/045', approvedBy: 'የክልሉ ርዕሰ መስተዳድር' },
+      { id: 'rh-100-3', rank: 'ኮሚሽነር', effectiveDate: '2020-01-01', orderNumber: 'ORD/2020/003', approvedBy: 'የክልሉ ካቢኔ' }
+    ],
+    transferHistory: [],
+    trainingHistory: [
+      { id: 'tr-100-1', title: 'ስትራቴጂክ የፀጥታ አመራርና የህዝብ ሰላም ግንባታ', trainingType: 'የአመራር ጥበብ', institution: 'የኢትዮጵያ ፖሊስ ዩኒቨርሲቲ', startDate: '2016-01-01', endDate: '2016-06-30', status: 'የተጠናቀቀ', gradeOrScore: 'እጅግ የላቀ (A)' }
+    ],
+    performanceHistory: [
+      { id: 'pf-100-1', year: 2025, evaluationPeriod: '2017 ዓ.ም ዓመታዊ ምዘና', score: 98, rating: 'እጅግ የላቀ (90-100)', supervisorName: 'የክልሉ ርዕሰ መስተዳድር', supervisorRank: 'ርዕሰ መስተዳድር', strength: 'የሰው ኃይል ሪፎርም በላቀ ብቃት መምራት', improvementArea: 'የቴክኖሎጂ ዲጂታላይዜሽን ማስፋፋት', finalDecision: 'የላቀ እውቅና', date: '2025-07-20' }
+    ],
+    leaveHistory: [],
+    documents: [],
+    benefits: [
+      { id: 'b-100-1', title: 'የከፍተኛ አመራር የቤት አበል', type: 'housing', monthlyAmount: 8000, startDate: '2020-01-01', status: 'active', remarks: 'ለኮሚሽነር የተፈቀደ' },
+      { id: 'b-100-2', title: 'የስራ ኃላፊነት ልዩ አበል', type: 'duty', monthlyAmount: 5000, startDate: '2020-01-01', status: 'active' }
+    ],
+    disciplinaryRecords: [],
+    awardsAndHonors: [
+      { id: 'aw-100-1', title: 'የክልሉ የላቀ የሰላም ሜዳሊያ', date: '2024-05-28', awardedBy: 'የቤኒሻንጉል ጉሙዝ ክልል መንግስት', reason: 'ለክልሉ ሰላምና ፀጥታ ግንባታ ላበረከቱት አስተዋጽኦ', medalOrCertRef: 'MED/2024/01' }
+    ],
+    userAccount: { username: 'admin', password: 'Admin123@', role: 'hr_admin', isActive: true, createdDate: '2020-01-01', lastLogin: '2026-10-09 10:00' }
+  },
   {
     policeId: 'BG-000101',
     badgeNumber: 'POL-0101',
@@ -806,8 +863,9 @@ export const INITIAL_SYSTEM_USERS: SystemUserAccount[] = [
   {
     id: 'usr-admin-1',
     username: 'admin',
-    password: 'Admin@123',
+    password: 'Admin123@',
     role: 'hr_admin',
+    policeId: 'BG-000100',
     fullName: 'ኮሚሽነር አበራ ታደሰ (ዋና የHR አስተዳዳሪ)',
     fullNameEn: 'Commissioner Abera Tadesse (Chief HR Admin)',
     department: 'የሰው ኃይል አስተዳደርና ልማት መምሪያ',

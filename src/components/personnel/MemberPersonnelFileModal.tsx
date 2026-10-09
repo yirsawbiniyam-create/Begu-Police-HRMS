@@ -6,7 +6,8 @@ import {
   DepartmentName,
   StationLocation,
   SeparationType,
-  PersonnelDocument
+  PersonnelDocument,
+  Role
 } from '../../types/hrms';
 import { SALARY_SCALE_MATRIX } from '../../data/mockHrmsData';
 import {
@@ -34,6 +35,9 @@ import {
   Building,
   Printer,
   KeyRound,
+  Lock,
+  Eye,
+  EyeOff,
   Folder,
   FolderCheck,
   Check,
@@ -82,7 +86,9 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
     updateMemberStepAndPromotionDates,
     applyStepIncrement,
     updateMemberProfile,
-    deleteMember
+    deleteMember,
+    currentUser,
+    updateUserAccountCredentials
   } = useHrms();
 
   // Always use the freshest member state from HrmsContext so newly added items show up immediately!
@@ -274,6 +280,72 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
   const memberAccount = userAccounts.find(
     u => u.policeId && u.policeId.toUpperCase() === member.policeId.toUpperCase()
   );
+
+  // Portal Account Credentials & Role Management States
+  const [credUsername, setCredUsername] = useState('');
+  const [credPassword, setCredPassword] = useState('');
+  const [credRole, setCredRole] = useState<Role>('member');
+  const [credIsActive, setCredIsActive] = useState(true);
+  const [showCredPassword, setShowCredPassword] = useState(false);
+  const [isSavingCred, setIsSavingCred] = useState(false);
+  const [credFeedback, setCredFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleOpenManageCredentials = () => {
+    const acc = memberAccount || userAccounts.find(u => u.policeId && u.policeId.toUpperCase() === member.policeId.toUpperCase());
+    const initialUser = acc?.username || member.userAccount?.username || (member.policeId === 'BG-000100' ? 'admin' : member.policeId);
+    const initialPass = acc?.password || acc?.tempPassword || member.userAccount?.password || (member.policeId === 'BG-000100' ? 'Admin123@' : 'Police@2026');
+    const initialR: Role = (acc?.role || member.userAccount?.role || (member.policeId === 'BG-000100' ? 'hr_admin' : 'member')) as Role;
+    setCredUsername(initialUser);
+    setCredPassword(initialPass);
+    setCredRole(initialR);
+    setCredIsActive(acc?.isActive ?? member.userAccount?.isActive ?? true);
+    setCredFeedback(null);
+    setActionModal('manage_credentials');
+  };
+
+  const handleSaveCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCredFeedback(null);
+    const cleanUser = credUsername.trim();
+    const cleanPass = credPassword.trim();
+    if (!cleanUser) {
+      setCredFeedback({ type: 'error', message: t('እባክዎ የተጠቃሚ ስም ያስገቡ', 'Please enter username') });
+      return;
+    }
+    if (!cleanPass) {
+      setCredFeedback({ type: 'error', message: t('እባክዎ የይለፍ ቃል ያስገቡ', 'Please enter password') });
+      return;
+    }
+    setIsSavingCred(true);
+    try {
+      const acc = memberAccount || userAccounts.find(u => u.policeId && u.policeId.toUpperCase() === member.policeId.toUpperCase());
+      const targetId = acc?.id || (member.policeId === 'BG-000100' ? 'usr-admin-1' : `usr-mem-${member.policeId}`);
+      let res;
+      if (acc) {
+        res = await updateUserAccountCredentials(targetId, cleanUser, cleanPass, credRole);
+      } else {
+        res = provisionMemberCredentials(member.policeId, cleanUser, cleanPass, credRole);
+      }
+      setIsSavingCred(false);
+      if (res.success) {
+        setCredFeedback({
+          type: 'success',
+          message: t(
+            `የተጠቃሚ ስም "${cleanUser}"፣ የይለፍ ቃል እና ሚና በፋየርስቶር ክላውድ ዳታቤዝ በተሳካ ሁኔታ ተቀምጧል!`,
+            `Username "${cleanUser}", password and role saved in Cloud Firestore successfully!`
+          )
+        });
+        setTimeout(() => {
+          setActionModal(null);
+        }, 1300);
+      } else {
+        setCredFeedback({ type: 'error', message: res.message });
+      }
+    } catch (err: any) {
+      setIsSavingCred(false);
+      setCredFeedback({ type: 'error', message: err?.message || 'ስህተት ተከስቷል' });
+    }
+  };
 
   // Forms states
   // 1. Promotion
@@ -561,15 +633,27 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   <div className="flex items-center gap-2 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-700 text-xs">
                     <KeyRound className="w-3.5 h-3.5 text-emerald-400" />
                     <span className="text-slate-300">
-                      {t('የSelf-Service መግቢያ:', 'Login:')}{' '}
+                      {t('የመግቢያ ስም:', 'Login:')}{' '}
                       <strong className="text-amber-400 font-mono">{memberAccount.username}</strong>
                     </span>
                     <span className="text-slate-600">|</span>
                     <span className="text-slate-300">
                       {t('ይለፍ ቃል:', 'Pass:')}{' '}
                       <code className="text-emerald-400 font-mono font-bold bg-slate-900 px-1 py-0.5 rounded border border-slate-800">
-                        {memberAccount.tempPassword || '••••••••'}
+                        {memberAccount.tempPassword || memberAccount.password || '••••••••'}
                       </code>
+                    </span>
+                    <span className="text-slate-600">|</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                      {memberAccount.role === 'hr_admin'
+                        ? '👑 አድሚን'
+                        : memberAccount.role === 'management'
+                        ? '🎖️ ከፍተኛ አመራር'
+                        : memberAccount.role === 'payroll_officer'
+                        ? '💰 የደመወዝ ባለሙያ'
+                        : memberAccount.role === 'supervisor'
+                        ? '🛡️ የቅርብ ሀላፊ'
+                        : '👮 አባል'}
                     </span>
                     {memberAccount.isActive ? (
                       <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded font-semibold border border-emerald-500/20">
@@ -580,14 +664,23 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                         {t('የታገደ', 'Suspended')}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={handleOpenManageCredentials}
+                      className="ml-1 px-2.5 py-0.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 rounded text-[11px] font-bold border border-amber-500/40 transition-colors shadow-sm"
+                      title={t('የተጠቃሚ ስም፣ የይለፍ ቃልና ሚና ቀይር', 'Change Username, Password & Role')}
+                    >
+                      {t('መለያና ሚና ቀይር', 'Edit Login & Role')}
+                    </button>
                   </div>
                 ) : (
                   <button
-                    onClick={() => provisionMemberCredentials(member.policeId)}
+                    type="button"
+                    onClick={handleOpenManageCredentials}
                     className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 rounded-lg text-xs font-bold border border-amber-500/30 transition-all shadow-sm"
                   >
                     <KeyRound className="w-3.5 h-3.5" />
-                    <span>{t('የአባሉን Self-Service መለያ ፍጠር (Provision Login)', 'Provision Self-Service Login')}</span>
+                    <span>{t('የአባሉን መለያና ሚና ፍጠር (Provision Login & Role)', 'Provision Login & Role')}</span>
                   </button>
                 )}
               </div>
@@ -3575,6 +3668,165 @@ export const MemberPersonnelFileModal: React.FC<MemberPersonnelFileModalProps> =
                   <span>{isSubmitting ? t('በማጥፋት ላይ...', 'Deleting...') : t('አባል ከሲስተሙ ሰርዝ', 'Confirm Delete')}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 14. Member / Admin Credentials & Role Management Modal */}
+        {actionModal === 'manage_credentials' && (
+          <div className="fixed inset-0 z-60 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl text-xs">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <KeyRound className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white">
+                      {member.policeId === 'BG-000100' || currentUser?.policeId === member.policeId
+                        ? t('የአድሚን መለያና የይለፍ ቃል ማስተካከያ', 'Admin Credentials & Security')
+                        : t('የመግቢያ መለያና የስራ ሚና ማስተካከያ', 'Member Credentials & System Role')}
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      {member.identity.fullName} · <span className="font-mono text-amber-400">{member.policeId}</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActionModal(null)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Firestore Info Card */}
+              <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 flex items-center gap-3">
+                <Shield className="w-5 h-5 text-amber-400 shrink-0" />
+                <div className="text-[11px] text-slate-300">
+                  <span className="font-semibold text-white block">
+                    {t('ይፋዊ የክላውድ ዳታቤዝ ምዝገባ', 'Official Cloud Firestore Sync')}
+                  </span>
+                  <span className="text-slate-400">
+                    {t(
+                      'የሚመርጡት ሚና፣ የተጠቃሚ ስምና የይለፍ ቃል በፋየርስቶር ዳታቤዝ ላይ ተመዝግቦ ወዲያውኑ ተግባራዊ ይሆናል።',
+                      'The assigned role, username, and password are saved to Cloud Firestore and take effect immediately.'
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              {/* Feedback Alert */}
+              {credFeedback && (
+                <div
+                  className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
+                    credFeedback.type === 'success'
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                  }`}
+                >
+                  {credFeedback.type === 'success' ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  )}
+                  <span>{credFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Form */}
+              <form onSubmit={handleSaveCredentials} className="space-y-4">
+                {/* Role Selector with 5 explicit choices */}
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    {t('የሲስተም የስራ ሚና (System Role Selection) *', 'System Role Selection *')}
+                  </label>
+                  <select
+                    value={credRole}
+                    onChange={e => setCredRole(e.target.value as Role)}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-white font-bold text-xs focus:outline-none"
+                  >
+                    <option value="hr_admin">👑 አድሚን (Admin / HR Admin)</option>
+                    <option value="management">🎖️ ከፍተኛ አመራር (Command / Management)</option>
+                    <option value="payroll_officer">💰 የደመወዝ ባለሙያ (Payroll Officer)</option>
+                    <option value="member">👮 አባል (Police Member Self-Service)</option>
+                    <option value="supervisor">🛡️ የቅርብ ሀላፊ (Immediate Supervisor)</option>
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {t(
+                      'አድሚን፣ ከፍተኛ አመራር፣ የደመወዝ ባለሙያ፣ አባል ወይም የቅርብ ሀላፊ በመምረጥ የተፈቀደለትን መዳረሻ ይስጡ።',
+                      'Select among: Admin, Management, Payroll Officer, Member, or Supervisor.'
+                    )}
+                  </p>
+                </div>
+
+                {/* Username */}
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    {t('የተጠቃሚ ስም (Username) *', 'Username *')}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={credUsername}
+                      onChange={e => setCredUsername(e.target.value)}
+                      placeholder={member.policeId}
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-white font-mono font-bold focus:outline-none pr-10"
+                    />
+                    <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    {t('የይለፍ ቃል (Password) *', 'Password *')}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showCredPassword ? 'text' : 'password'}
+                      required
+                      value={credPassword}
+                      onChange={e => setCredPassword(e.target.value)}
+                      placeholder="Admin123@ / Police@2026"
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-white font-mono font-bold focus:outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCredPassword(!showCredPassword)}
+                      className="absolute right-3.5 top-3 text-slate-400 hover:text-white"
+                    >
+                      {showCredPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    disabled={isSavingCred}
+                    onClick={() => setActionModal(null)}
+                    className="px-4 py-2 text-slate-400 hover:text-white"
+                  >
+                    {t('ሰርዝ', 'Cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingCred}
+                    className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl flex items-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    <Save className={`w-4 h-4 ${isSavingCred ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isSavingCred
+                        ? t('በፋየርስቶር በማስቀመጥ ላይ...', 'Saving to Firestore...')
+                        : t('በፋየርስቶር ክላውድ ዳታቤዝ አስቀምጥ', 'Save to Cloud Firestore')}
+                    </span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

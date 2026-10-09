@@ -4,7 +4,8 @@ import {
   PoliceRank,
   DepartmentName,
   StationLocation,
-  PoliceIdIdentity
+  PoliceIdIdentity,
+  Role
 } from '../../types/hrms';
 import {
   Cpu,
@@ -16,6 +17,7 @@ import {
   ArrowRight,
   Database,
   Lock,
+  KeyRound,
   ExternalLink,
   ShieldCheck,
   Building,
@@ -48,6 +50,7 @@ export const IdSystemIntegration: React.FC<IdSystemIntegrationProps> = ({ onOpen
     syncWithLiveIdSystemNow,
     autoOpenPersonnelFileFromIdSystem,
     simulateCreateIdInExternalSystem,
+    provisionMemberCredentials,
     t
   } = useHrms();
 
@@ -78,6 +81,16 @@ export const IdSystemIntegration: React.FC<IdSystemIntegrationProps> = ({ onOpen
   const [simGender, setSimGender] = useState('ወ');
   const [simBlood, setSimBlood] = useState('O+');
   const [simPhotoUrl, setSimPhotoUrl] = useState('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80');
+
+  // Credentials & Role Selection when issuing ID
+  const [simRole, setSimRole] = useState<Role>('member');
+  const [simUsername, setSimUsername] = useState('');
+  const [simPassword, setSimPassword] = useState('Police@2026');
+
+  // Lookup & Onboard Credentials & Role
+  const [lookupRole, setLookupRole] = useState<Role>('member');
+  const [lookupUsername, setLookupUsername] = useState('');
+  const [lookupPassword, setLookupPassword] = useState('Police@2026');
 
   // Initial Placement when using custom onboarding form
   const [initialRank, setInitialRank] = useState<PoliceRank>('ኮንስታብል');
@@ -133,6 +146,14 @@ export const IdSystemIntegration: React.FC<IdSystemIntegrationProps> = ({ onOpen
     });
 
     if (res.success) {
+      if (res.newMember) {
+        provisionMemberCredentials(
+          res.newMember.policeId,
+          lookupUsername.trim() || undefined,
+          lookupPassword.trim() || undefined,
+          lookupRole
+        );
+      }
       setNotificationMsg({ text: res.message, type: 'success' });
       handleSearch();
       if (res.newMember) {
@@ -172,6 +193,15 @@ export const IdSystemIntegration: React.FC<IdSystemIntegrationProps> = ({ onOpen
         badgeNumber: simBadge,
         bloodType: simBlood
       });
+
+      if (res.autoCreatedMember) {
+        provisionMemberCredentials(
+          res.autoCreatedMember.policeId,
+          simUsername.trim() || undefined,
+          simPassword.trim() || undefined,
+          simRole
+        );
+      }
 
       setNotificationMsg({ text: res.message, type: 'success' });
       if (res.autoCreatedMember) {
@@ -721,6 +751,64 @@ export const IdSystemIntegration: React.FC<IdSystemIntegrationProps> = ({ onOpen
                   </div>
                 </div>
 
+                {/* Instant Credentials & Role Assignment Section (መታወቂያው እንደተሰራለት ወዲያውኑ ዩዘርኔም፣ ፓስዎርድ እና ሚና ምርጫ) */}
+                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-3">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-amber-500" />
+                    <span className="text-xs font-black text-slate-900">
+                      {t('የመግቢያ መለያና የስራ ሚና ምርጫ (System Role & Credentials)', 'System Role & Portal Credentials')}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        {t('የሲስተም የስራ ሚና (Role Selection) *', 'System Role Selection *')}
+                      </label>
+                      <select
+                        value={simRole}
+                        onChange={(e) => setSimRole(e.target.value as Role)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white text-slate-900 focus:ring-2 focus:ring-amber-500"
+                      >
+                        <option value="member">👮 አባል (Member Self-Service)</option>
+                        <option value="hr_admin">👑 አድሚን (Admin / HR Admin)</option>
+                        <option value="management">🎖️ ከፍተኛ አመራር (Command / Management)</option>
+                        <option value="payroll_officer">💰 የደመወዝ ባለሙያ (Payroll Officer)</option>
+                        <option value="supervisor">🛡️ የቅርብ ሀላፊ (Immediate Supervisor)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        {t('የተጠቃሚ ስም (Username)', 'Username')}
+                      </label>
+                      <input
+                        type="text"
+                        value={simUsername}
+                        onChange={(e) => setSimUsername(e.target.value)}
+                        placeholder="በራስ-ሰር በመታወቂያ ቁጥር"
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono bg-white text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        {t('የይለፍ ቃል (Password)', 'Password')}
+                      </label>
+                      <input
+                        type="text"
+                        value={simPassword}
+                        onChange={(e) => setSimPassword(e.target.value)}
+                        placeholder="Police@2026"
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono bg-white text-slate-900"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-600">
+                    {t(
+                      'መታወቂያው እንደተሰራለት ወዲያውኑ የተመረጠው ሚና (አድሚን፣ ከፍተኛ አመራር፣ የደመወዝ ባለሙያ፣ አባል፣ የቅርብ ሀላፊ) በፋየርስቶር ይመዘገባል።',
+                      'Immediately upon issuing ID, selected role and credentials are recorded to Cloud Firestore.'
+                    )}
+                  </p>
+                </div>
+
                 {/* Instant Ingestion CTA */}
                 <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-xs text-slate-500 flex items-center gap-2">
@@ -915,6 +1003,58 @@ export const IdSystemIntegration: React.FC<IdSystemIntegrationProps> = ({ onOpen
                         </div>
                       </div>
 
+                      {/* Credentials & Role Assignment Section */}
+                      <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <KeyRound className="w-4 h-4 text-amber-500" />
+                          <span className="text-xs font-black text-slate-900">
+                            {t('የመግቢያ መለያና የስራ ሚና ምርጫ (System Role & Credentials)', 'System Role & Portal Credentials')}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              {t('የሲስተም የስራ ሚና *', 'System Role *')}
+                            </label>
+                            <select
+                              value={lookupRole}
+                              onChange={(e) => setLookupRole(e.target.value as Role)}
+                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg font-bold bg-white text-slate-900 focus:ring-2 focus:ring-amber-500"
+                            >
+                              <option value="member">👮 አባል (Member Self-Service)</option>
+                              <option value="hr_admin">👑 አድሚን (Admin / HR Admin)</option>
+                              <option value="management">🎖️ ከፍተኛ አመራር (Command / Management)</option>
+                              <option value="payroll_officer">💰 የደመወዝ ባለሙያ (Payroll Officer)</option>
+                              <option value="supervisor">🛡️ የቅርብ ሀላፊ (Immediate Supervisor)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              {t('የተጠቃሚ ስም (Username)', 'Username')}
+                            </label>
+                            <input
+                              type="text"
+                              value={lookupUsername}
+                              onChange={(e) => setLookupUsername(e.target.value)}
+                              placeholder={searchResult.data?.policeId || 'BGR-POL-...'}
+                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg font-mono bg-white text-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              {t('የይለፍ ቃል (Password)', 'Password')}
+                            </label>
+                            <input
+                              type="text"
+                              value={lookupPassword}
+                              onChange={(e) => setLookupPassword(e.target.value)}
+                              placeholder="Police@2026"
+                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg font-mono bg-white text-slate-900"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="flex justify-end pt-2">
                         <button
                           type="button"
@@ -922,7 +1062,7 @@ export const IdSystemIntegration: React.FC<IdSystemIntegrationProps> = ({ onOpen
                           className="px-6 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors inline-flex items-center gap-2"
                         >
                           <UserPlus size={14} />
-                          {t('በተመረጠው ምደባ ማህደር ክፈት', 'Open Dossier with Custom Placement')}
+                          {t('በተመረጠው ምደባና ሚና ማህደር ክፈት', 'Open Dossier with Custom Placement & Role')}
                         </button>
                       </div>
                     </div>

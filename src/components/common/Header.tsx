@@ -19,14 +19,16 @@ import {
   Cloud
 } from 'lucide-react';
 import { SystemLogoModal } from './SystemLogoModal';
+import { AdminAccountSettingsModal } from '../auth/AdminAccountSettingsModal';
 
 interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onOpenLoginPortal?: () => void;
+  onOpenMemberFile?: (policeId: string) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenLoginPortal }) => {
+export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenLoginPortal, onOpenMemberFile }) => {
   const {
     currentUser,
     logout,
@@ -51,6 +53,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
   const [showRoleSelector, setShowRoleSelector] = useState(false);
   const [showMemberSelector, setShowMemberSelector] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
+  const [showAdminSettingsModal, setShowAdminSettingsModal] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -223,6 +226,32 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
               </div>
             )}
 
+            {/* Admin Self-Dossier and Admin Credentials Actions */}
+            {(currentRole === 'hr_admin' || currentUser?.role === 'hr_admin') && (
+              <div className="flex items-center gap-1.5">
+                {onOpenMemberFile && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenMemberFile(currentUser?.policeId || 'BG-000100')}
+                    className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all shadow-sm"
+                    title={t('የአድሚን የግል ፖሊስ ማህደር ክፈት', 'Open Admin Police Dossier')}
+                  >
+                    <User className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{t('የአድሚኑ ማህደር', 'My Dossier')}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowAdminSettingsModal(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all shadow-sm"
+                  title={t('የአድሚን የተጠቃሚ ስምና የይለፍ ቃል ማስተካከያ (Admin Username & Password)', 'Admin Username & Password Settings')}
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">{t('የአድሚን መለያ', 'Admin Account')}</span>
+                </button>
+              </div>
+            )}
+
             {/* Notifications Popover */}
             <div className="relative">
               <button
@@ -342,6 +371,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
       <SystemLogoModal
         isOpen={showLogoModal}
         onClose={() => setShowLogoModal(false)}
+      />
+
+      {/* Admin Credentials & Password Modal */}
+      <AdminAccountSettingsModal
+        isOpen={showAdminSettingsModal}
+        onClose={() => setShowAdminSettingsModal(false)}
       />
     </header>
   );
